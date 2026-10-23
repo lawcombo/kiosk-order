@@ -69,7 +69,7 @@ function persist(){try{localStorage.setItem(STORAGE,JSON.stringify(state))}catch
 function stepper(key,qty,min=1,max=10000,disabled=false){return `<div><div class="stepper"><button type="button" aria-label="${esc(key)} 수량 감소" data-click="step('${key}',-1)" ${disabled||qty<=min?'disabled':''}>−</button><input aria-label="${esc(key)} 수량" value="${qty}" type="number" min="${min}" max="${max}" data-change="setQty('${key}',this.value)" ${disabled?'disabled':''}><button type="button" aria-label="${esc(key)} 수량 증가" data-click="step('${key}',1)" ${disabled||qty>=max?'disabled':''}>＋</button></div></div>`}
 function step(key,delta){const o=optDefs.find(o=>o.id===key);setQty(key,(key==='main'?state.qty:optState(o).qty)+delta)}
 function setQty(key,n){const max=key==='main'?100:optionLimit(optDefs.find(o=>o.id===key));const qty=Math.max(key==='main'?1:0,Math.min(max,parseInt(n)||0));if(key==='main'){state.qty=qty;if(!equipmentOnly()&&state.options.passport?.qty>qty)state.options.passport.qty=qty}else state.options[key]={...state.options[key],qty,on:qty>0};render()}
-function chooseType(type){state.type=type;state.showCost=false;state.showFixed=false;render()}
+function chooseType(type){state.type=type;state.options={};state.showCost=false;state.showFixed=false;render()}
 function chooseModel(n){state.showCost=state.model===n?!state.showCost:true;state.model=n;state.showFixed=false;render()}
 function toggleFixed(){state.showFixed=!state.showFixed;render()}
 function chooseVan(v){state.van=v;render()}
@@ -145,12 +145,15 @@ function equipmentRequestMarkup(){
  ${sectionTitle('04','접수 및 회신')}<table class="req-info"><tbody>${infoRow('접수자 / 소속',r.name,'처리 상태',r.status||'미접수')}${infoRow('납품·설치일',r.due,'확인',r.name?'확인자: '+r.name:'서명 / 확인:')}<tr><th>보완·회신</th><td colspan="3" class="req-reply">${note(r.notes)}</td></tr></tbody></table><div class="req-footer"><span>NICE 인프라 · 장비 개별 구성</span><span>부품 원가 기준 / 설치·공사·운송비 별도</span></div></article>`;
 }
 function equipmentEmailMarkup(){
- return '<div style="font-family:Arial,\'Malgun Gothic\',sans-serif;color:#203449;font-size:13px;line-height:1.7;max-width:820px">'+equipmentRequestMarkup()
-  .replace(/<table\b[^>]*>/g,'<table style="border-collapse:collapse;width:100%;font-size:12px;margin:10px 0 18px;table-layout:fixed">')
-  .replace(/<t[hd]\b[^>]*>/g,tag=>{const head=tag.startsWith('<th'),align=tag.includes('class="n"')?'right':tag.includes('class="q"')?'center':'left';return tag.slice(0,-1)+` style="${head?'background:#edf3f8;':''}border:1px solid #dce4ed;padding:8px;text-align:${align};vertical-align:middle;overflow-wrap:anywhere">`})
-  .replace(/class="req-spec"/g,'style="display:block;color:#6c7c8c;font-size:11px"')
-  .replace(/class="req-section"/g,'style="font-size:15px;color:#153c60;margin:23px 0 8px;border-bottom:1px solid #b8c9d9"')
-  .replace(/class="grand"/g,'style="background:#153c60;color:white;padding:12px;font-size:16px"')+'</div>';
+ const c=calc(),i=state.info,r=state.receiver;
+ const body=`<div style="font-family:Arial,'Malgun Gothic',sans-serif;color:#203449;font-size:13px;line-height:1.7;max-width:820px"><h2 style="font-size:20px;color:#153c60;border-bottom:2px solid #153c60;padding-bottom:12px;margin:0 0 16px">장비 출하 신청 · ${esc(i.site||'매장명 미기재')}</h2><p>안녕하세요. 아래 장비의 출하 및 설치를 요청드립니다.</p>
+ ${emailHeading('01. 신청 및 현장 정보')}${emailInfoTable(infoRow('신청자 / 소속',i.applicant,'신청일',i.date)+infoRow('숙박업소명',i.site,'사업자번호',i.business)+infoRow('현장 담당자',i.contact,'설치 희망일',i.install)+`<tr><th>설치 주소</th><td colspan="3">${esc(i.address||'미기재')}</td></tr>`+infoRow('운송 / 설치',i.delivery||'미정','신청 유형','장비 개별 구성 (NO KIOSK)')+infoRow('S/W·관제',i.sw||'미정','PMS / 계정',i.pms||'미정'))}
+ ${emailHeading('02. 선택 장비')}${requestItemTable(c.lines,'선택한 장비 없음','선택 장비 소계')}
+ ${emailHeading('03. 원가 합계')}${emailInfoTable(emailCostRow(c.missing.length?'확인된 부품 원가 합계':'총 부품 원가',c.total,true))}
+ ${emailHeading('04. 설치 · 출하 요청사항')}<table class="email-info" style="border-collapse:collapse;width:100%;font-size:13px;margin:10px 0 20px"><tbody><tr><td>${esc(i.notes||'별도 요청 없음').replace(/\n/g,'<br>')}</td></tr></tbody></table>
+ ${emailHeading('05. 접수 및 회신')}${emailInfoTable(infoRow('접수자 / 소속',r.name,'처리 상태',r.status||'미접수')+infoRow('납품·설치일',r.due,'확인',r.name?'확인자: '+r.name:'서명 / 확인:')+`<tr><th>보완·회신</th><td colspan="3">${esc(r.notes||'확인 후 회신 부탁드립니다.').replace(/\n/g,'<br>')}</td></tr>`)}
+ ${warnings(c).length?'<p><b>구성 확인사항</b><br>'+warnings(c).map(esc).join('<br>')+'</p>':''}<p style="color:#6c7c8c;font-size:12px">설치·공사·운송비 제외. 부가세 포함 여부 별도 확인. 단가 미확정 항목은 합계에서 제외됩니다.</p><p>구성 확인 후 출하·설치 가능 일정을 회신 부탁드립니다.</p></div>`;
+ return styleEmailMarkup(body);
 }
 function requestText(){
  if(equipmentOnly())return equipmentRequestText();
@@ -186,11 +189,13 @@ function requestMarkup(){
  <article class="req-sheet detail-sheet">${header(true)}<div class="req-reference"><b>${esc(i.site||'매장명 미기재')}</b><span>${state.van} VAN / ${state.qty}대 / 신청자 ${esc(i.applicant||'미기재')}</span></div>${sectionTitle('01',typeName()+' 고정 부품')}${requestItemTable(g.fixed,'해당 없음',typeName()+' 고정 부품 소계')}${sectionTitle('02','모델별 포함 장비')}${requestItemTable(g.model,'해당 없음','모델별 포함 장비 소계')}<div class="req-detail-total"><span>기본 구성 최종 합계${c.adjust?' (교체 차감 반영 후)':''}</span><b>${requestMoney(cost([...g.fixed,...g.model]))}</b></div>${c.adjust?'<p class="req-caption">교체 수량만큼 와이즈큐브를 제외했습니다. 다윈 여권인식기는 신청서의 추가 옵션·교체품 표에 기재했습니다.</p>':''}<p class="req-caption">세부 부품 P/N을 기준으로 출하 구성과 수량을 확인해 주세요. 단가 미확정 항목은 합계에서 제외됩니다.</p>${footer}</article>`;
 }
 function emailInfoTable(rows){return `<table class="email-info" style="border-collapse:collapse;width:100%;font-size:13px;margin:10px 0 20px;table-layout:fixed"><colgroup><col style="width:16%"><col style="width:34%"><col style="width:16%"><col style="width:34%"></colgroup><tbody>${rows}</tbody></table>`}
+function emailHeading(x){return `<h3 style="font-size:15px;color:#153c60;margin:23px 0 8px;padding-bottom:5px;border-bottom:1px solid #b8c9d9">${x}</h3>`}
+function emailCostRow(label,amount,bold=false){return `<tr${bold?' style="background:#edf3f8;font-weight:700"':''}><th colspan="3">${label}</th><td class="n">${requestMoney(amount)}</td></tr>`}
+function styleEmailMarkup(body){return body.replace(/<table class="req-table">/g,'<table style="border-collapse:collapse;width:100%;font-size:12px;margin:10px 0 18px;table-layout:fixed">').replace(/<t[hd]\b[^>]*>/g,tag=>{const head=tag.startsWith('<th'),align=tag.includes('class="n"')?'right':tag.includes('class="q"')?'center':'left';return tag.slice(0,-1)+` style="${head?'background:#edf3f8;':''}border:1px solid #dce4ed;padding:8px;text-align:${align};vertical-align:middle;overflow-wrap:anywhere">`}).replace(/class="req-spec"/g,'style="display:block;color:#6c7c8c;font-size:11px"').replace(/class="req-subtotal"/g,'style="background:#edf3f8;font-weight:700"')}
 function emailMarkup(){
  if(equipmentOnly())return equipmentEmailMarkup();
  const c=calc(),g=requestGroups(c),i=state.info,mod=models[state.model-1];
- const heading=x=>`<h3 style="font-size:15px;color:#153c60;margin:23px 0 8px;padding-bottom:5px;border-bottom:1px solid #b8c9d9">${x}</h3>`;
- const costRow=(label,amount,bold=false)=>`<tr${bold?' style="background:#edf3f8;font-weight:700"':''}><th colspan="3">${label}</th><td class="n">${requestMoney(amount)}</td></tr>`;
+ const heading=emailHeading,costRow=emailCostRow;
  let body=`<div style="font-family:Arial,'Malgun Gothic',sans-serif;color:#203449;font-size:13px;line-height:1.7;max-width:820px"><h2 style="font-size:20px;color:#153c60;border-bottom:2px solid #153c60;padding-bottom:12px;margin:0 0 16px">키오스크 출하 신청 · ${esc(i.site||'매장명 미기재')}</h2><p>안녕하세요. 아래 구성으로 출하 및 설치를 요청드립니다.</p>
  ${heading('01. 신청 및 현장 정보')}${emailInfoTable(infoRow('신청자 / 소속',i.applicant,'신청일',i.date)+infoRow('숙박업소명',i.site,'사업자번호',i.business)+infoRow('현장 담당자',i.contact,'설치 희망일',i.install)+`<tr><th>설치 주소</th><td colspan="3">${esc(i.address||'미기재')}</td></tr>`+infoRow('운송 / 설치',i.delivery||'미정','신청 수량',state.qty+'대'))}
  ${heading('02. 신청 모델')}${emailInfoTable(`<tr><th>모델명</th><td colspan="3"><b>${typeName()} ${code()} · ${mod.title}</b></td></tr><tr><th>기본 구성</th><td colspan="3">${mod.video} + ${mod.key} / PTZ·PoE Hub 포함</td></tr>`+infoRow('결제 VAN',state.van+' VAN','수량',state.qty+'대')+infoRow('S/W·관제',i.sw||'미정','PMS / 계정',i.pms||'미정')+infoRow('키오스크 닉네임',i.nickname||'미정','CAT ID',i.catid||'추후 전달'))}
@@ -200,7 +205,7 @@ function emailMarkup(){
  ${heading('06. 원가 합계')}${emailInfoTable(costRow('모델 기본 원가',c.baseTotal)+costRow('추가 옵션·교체품',c.optionTotal)+(c.adjust?costRow('와이즈큐브 제외 금액',c.adjust):'')+costRow(c.missing.length?'확인된 부품 원가 합계':'총 부품 원가',c.total,true))}
  ${heading('07. 설치 · 출하 요청사항')}<table class="email-info" style="border-collapse:collapse;width:100%;font-size:13px;margin:10px 0 20px"><tbody><tr><td>${esc(i.notes||'별도 요청 없음').replace(/\n/g,'<br>')}</td></tr></tbody></table>
  ${warnings(c).length?'<p><b>구성 확인사항</b><br>'+warnings(c).map(esc).join('<br>')+'</p>':''}<p style="color:#6c7c8c;font-size:12px">설치·공사·운송비 제외. 부가세 포함 여부 별도 확인. 단가 미확정 항목은 합계에서 제외됩니다.</p><p>구성 확인 후 출하·설치 가능 일정을 회신 부탁드립니다.</p></div>`;
- return body.replace(/<table class="req-table">/g,'<table style="border-collapse:collapse;width:100%;font-size:12px;margin:10px 0 18px;table-layout:fixed">').replace(/<t[hd]\b[^>]*>/g,tag=>{const head=tag.startsWith('<th'),align=tag.includes('class="n"')?'right':tag.includes('class="q"')?'center':'left';return tag.slice(0,-1)+` style="${head?'background:#edf3f8;':''}border:1px solid #dce4ed;padding:8px;text-align:${align};vertical-align:middle;overflow-wrap:anywhere">`}).replace(/class="req-spec"/g,'style="display:block;color:#6c7c8c;font-size:11px"').replace(/class="req-subtotal"/g,'style="background:#edf3f8;font-weight:700"');
+ return styleEmailMarkup(body);
 }
 async function copyRequest(){syncFormFields();try{if(navigator.clipboard.write&&typeof ClipboardItem!=='undefined'){await navigator.clipboard.write([new ClipboardItem({'text/plain':new Blob([requestText()],{type:'text/plain'}),'text/html':new Blob([emailMarkup()],{type:'text/html'})})]);}else await navigator.clipboard.writeText(requestText());toast('요청 내용을 복사했습니다. 메일에 붙여넣으세요.')}catch(e){try{await navigator.clipboard.writeText(requestText());toast('요청 내용을 텍스트로 복사했습니다.')}catch(err){download('키오스크_출하요청.txt',requestText(),'text/plain;charset=utf-8');toast('요청 내용을 텍스트 파일로 저장했습니다.')}}}
 function download(name,body,mime){const url=URL.createObjectURL(new Blob([body],{type:mime})),a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}
