@@ -14,7 +14,7 @@
 .van-row{border-top:1px solid var(--line);margin-top:20px;padding-top:20px}.van-row>b{flex-shrink:0}.van-row .van{margin-top:0;justify-content:flex-end}.van-row .radio{white-space:nowrap}@media(max-width:400px){.van-row{gap:8px}.van-row .van{gap:6px}.van-row .radio{padding:9px 10px;font-size:13px}}
 </style></head><body>
 <header><div class="brand">NICE 인프라 <small>무인숙박 출하 신청</small></div><div class="toolbar"><button class="btn" data-click="openSettings()">부품 P/N·단가 관리</button><button class="btn" data-click="document.getElementById('importFile').click()">신청서 불러오기</button></div></header>
-<main><div><div class="intro"><h1>키오스크를 선택하세요</h1><p class="muted">제품과 모델을 고르고, 필요한 옵션만 추가하면 됩니다.</p><div class="steps"><span>1 제품 유형</span><span>2 모델</span><span>3 옵션</span><span>4 신청서 저장</span></div></div>
+<main><div>
 <section class="panel"><div class="sect"><h2><span class="num">1</span>제품 유형</h2></div><div class="types" id="types"></div></section>
 <section class="panel"><div class="sect"><h2><span class="num">2</span><span id="modelHeading"></span></h2><span class="muted" style="font-size:12px">1대 기준 부품 원가</span></div><div class="models" id="models"></div><div class="divider"></div><div class="row"><b>키오스크 수량</b><div id="mainQty"></div></div><div class="row van-row"><b>결제 VAN사</b><div class="van" id="vans"></div></div><div class="note">필수 부품은 모델에 모두 포함됩니다. PTZ 카메라와 PoE Hub도 기본 포함입니다.</div><details><summary>이 모델의 기본 부품·P/N 보기</summary><div class="scroll" id="baseTable"></div></details></section>
 <section class="panel"><div class="sect"><h2><span class="num">3</span>추가 옵션</h2></div><p class="muted" style="font-size:13px">기본 수량은 모두 0입니다. ＋로 추가하고, 0으로 줄이면 제외됩니다. 수량은 현장 전체 기준입니다.</p><div class="options" id="options"></div></section>
@@ -121,9 +121,6 @@ function render(){
  $('mainQty').innerHTML=standalone?'':stepper('main',state.qty,1,100);
  $('vans').innerHTML=standalone?'':['NICE','KIS'].map(v=>`<button type="button" class="radio ${state.van===v?'active':''}" aria-pressed="${state.van===v}" data-click="chooseVan('${v}')">${v} VAN</button>`).join('');
  $('baseTable').innerHTML=standalone?'':table(c.base);
- document.querySelector('.intro h1').textContent=standalone?'필요한 장비를 구성하세요':'키오스크를 선택하세요';
- document.querySelector('.intro > p').textContent=standalone?'기본·필수 품목 없이 추가 옵션에서 필요한 장비와 수량을 선택하세요.':'제품과 모델을 고르고, 필요한 옵션만 추가하면 됩니다.';
- document.querySelector('.steps').innerHTML=(standalone?['1 제품 유형','2 옵션','3 신청서 저장']:['1 제품 유형','2 모델','3 옵션','4 신청서 저장']).map(x=>`<span>${x}</span>`).join('');
  $('options').closest('.panel').querySelector('.num').textContent=standalone?'2':'3';
  $('infoForm').closest('.panel').querySelector('.num').textContent=standalone?'3':'4';
  $('options').innerHTML=optDefs.map(o=>{
@@ -159,7 +156,7 @@ function equipmentRequestText(){
  '', '안녕하세요. 아래 장비의 출하 및 설치를 요청드립니다.', '',
  '[1. 신청·현장 정보]', '신청자: '+(i.applicant||'미기재'), '신청일: '+(i.date||'미기재'), '숙박업소명: '+(i.site||'미기재'), '사업자번호: '+(i.business||'미기재'), '현장 담당자 / 연락처: '+(i.contact||'미기재'), '설치 희망일: '+(i.install||'미정'), '설치 희망 시간: '+(i.installTime||'미정'), '설치 주소: '+(i.address||'미기재'), '운송 / 설치: '+(i.delivery||'미정'), 'S/W·관제: '+(i.sw||'미정'), 'PMS / 계정정보: '+(i.pms||'미정'), '',
  '[2. 선택 장비]', ...(c.lines.length?c.lines.map(p=>'- '+p.name+' (P/N: '+(p.pn||'미등록')+') / 수량 '+p.qty+' / 원가 '+requestUnit(typeof p.price==='number'?p.price*p.qty:null)):['선택한 장비 없음']), '',
- '[3. 부품 원가]', (c.missing.length?'확인된 원가 합계: ':'총 부품 원가: ')+requestMoney(c.total), '설치·공사·운송비 제외. 부가세 포함 여부 별도 확인.', '',
+ '[3. 부품 원가]', (c.missing.length?'확인된 원가 합계: ':'총 부품 원가: ')+requestMoney(c.total), '',
  '[4. 설치·출하 요청사항]',i.notes||'별도 요청 없음'].join('\n');
 }
 function equipmentRequestMarkup(){
@@ -177,7 +174,7 @@ function equipmentEmailMarkup(){
  ${emailHeading('02. 선택 장비')}${requestItemTable(c.lines,'선택한 장비 없음','선택 장비 소계')}
  ${emailHeading('03. 원가 합계')}${emailInfoTable(emailCostRow(c.missing.length?'확인된 부품 원가 합계':'총 부품 원가',c.total,true))}
  ${emailHeading('04. 설치 · 출하 요청사항')}<table class="email-info" style="border-collapse:collapse;width:100%;font-size:13px;margin:10px 0 20px"><tbody><tr><td>${esc(i.notes||'별도 요청 없음').replace(/\n/g,'<br>')}</td></tr></tbody></table>
- <p style="color:#6c7c8c;font-size:12px">설치·공사·운송비 제외. 부가세 포함 여부 별도 확인. 단가 미확정 항목은 합계에서 제외됩니다.</p><p>구성 확인 후 출하·설치 가능 일정을 회신 부탁드립니다.</p></div>`;
+ </div>`;
  return styleEmailMarkup(body);
 }
 function requestText(){
@@ -190,7 +187,7 @@ function requestText(){
  '[2. 신청 모델]', '모델: '+typeName()+' '+code()+' · '+mod.title, '구성: '+mod.video+' + '+mod.key+' / '+state.van+' VAN', '수량: '+state.qty+'대', '키오스크 닉네임: '+(info.nickname||'미정'), 'CAT ID: '+(info.catid||'추후 전달'), 'S/W·관제: '+(info.sw||'미정'), 'PMS / 계정정보: '+(info.pms||'미정'), '',
  '[3. 기본 구성 부품]', '가. '+typeName()+' 고정 부품'+(c.adjust?' (여권인식기 교체 수량 반영)':''), ...g.fixed.map(line), '고정 부품 소계: '+requestMoney(cost(g.fixed)), '', '나. 모델별 포함 장비', ...g.model.map(line), '모델별 포함 장비 소계: '+requestMoney(cost(g.model)), '기본 구성 최종 합계: '+requestMoney(cost([...g.fixed,...g.model])), '',
  '[4. 추가 옵션·교체품]', ...(c.options.length?c.options.flatMap(o=>[o.def.name+' '+o.qty+(o.def.unit||'개'),...o.parts.map(line)]):['추가 옵션 없음']), '',
- '[5. 부품 원가]', '모델 기본 원가: '+requestMoney(c.baseTotal), '추가 옵션·교체품: '+requestMoney(c.optionTotal), ...(c.adjust?['와이즈큐브 제외 금액: '+requestMoney(c.adjust)]:[]), (c.missing.length?'확인된 원가 합계: ':'총 부품 원가: ')+requestMoney(c.total), '설치·공사·운송비 제외. 부가세 포함 여부 별도 확인.', '',
+ '[5. 부품 원가]', '모델 기본 원가: '+requestMoney(c.baseTotal), '추가 옵션·교체품: '+requestMoney(c.optionTotal), ...(c.adjust?['와이즈큐브 제외 금액: '+requestMoney(c.adjust)]:[]), (c.missing.length?'확인된 원가 합계: ':'총 부품 원가: ')+requestMoney(c.total), '',
  '[6. 설치·출하 요청사항]',info.notes||'별도 요청 없음'].join('\n');
 }
 function itemTable(list,empty='해당 없음',subtotalLabel='',showPrices=true){
@@ -229,7 +226,7 @@ function emailMarkup(){
  ${heading('05. 추가 옵션 · 교체품')}${requestItemTable(g.options,'추가 옵션 없음','추가 옵션·교체품 소계')}
  ${heading('06. 원가 합계')}${emailInfoTable(costRow('모델 기본 원가',c.baseTotal)+costRow('추가 옵션·교체품',c.optionTotal)+(c.adjust?costRow('와이즈큐브 제외 금액',c.adjust):'')+costRow(c.missing.length?'확인된 부품 원가 합계':'총 부품 원가',c.total,true))}
  ${heading('07. 설치 · 출하 요청사항')}<table class="email-info" style="border-collapse:collapse;width:100%;font-size:13px;margin:10px 0 20px"><tbody><tr><td>${esc(i.notes||'별도 요청 없음').replace(/\n/g,'<br>')}</td></tr></tbody></table>
- <p style="color:#6c7c8c;font-size:12px">설치·공사·운송비 제외. 부가세 포함 여부 별도 확인. 단가 미확정 항목은 합계에서 제외됩니다.</p><p>구성 확인 후 출하·설치 가능 일정을 회신 부탁드립니다.</p></div>`;
+ </div>`;
  return styleEmailMarkup(body);
 }
 async function copyRequest(){syncFormFields();try{if(navigator.clipboard.write&&typeof ClipboardItem!=='undefined'){await navigator.clipboard.write([new ClipboardItem({'text/plain':new Blob([requestText()],{type:'text/plain'}),'text/html':new Blob([emailMarkup()],{type:'text/html'})})]);}else await navigator.clipboard.writeText(requestText());toast('요청 내용을 복사했습니다. 메일에 붙여넣으세요.')}catch(e){try{await navigator.clipboard.writeText(requestText());toast('요청 내용을 텍스트로 복사했습니다.')}catch(err){download('키오스크_출하요청.txt',requestText(),'text/plain;charset=utf-8');toast('요청 내용을 텍스트 파일로 저장했습니다.')}}}
