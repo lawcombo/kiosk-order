@@ -64,6 +64,7 @@ function normalize(x){
  }
  z.optionQtyVersion=2;z.priceDisclosure=z.priceDisclosure==='Y'?'Y':'N';return z
 }state=normalize(state);
+state.info.date=todayDate();
 const $=x=>document.getElementById(x),money=n=>new Intl.NumberFormat('ko-KR').format(n)+'원',esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const windowMoney=money;
 function requestMoney(n){return state.priceDisclosure==='Y'?money(n):'-'}
