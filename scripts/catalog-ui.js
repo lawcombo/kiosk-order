@@ -3,7 +3,7 @@ const DEFAULT_CATALOG=JSON.parse(document.getElementById('catalogData').textCont
 let catalog=structuredClone(DEFAULT_CATALOG);
 let catalogLoadSequence=0;
 let catalogLoadError='';
-const manager={draft:null,revision:null,loaded:false,loading:false,saving:false,dirty:false,tab:'required',model:'G1',requiredType:'general',optionGroup:'',groups:[],sequence:0};
+const manager={draft:null,revision:null,loaded:false,loading:false,saving:false,dirty:false,tab:'models',model:'G1',requiredType:'general',optionGroup:'',groups:[],sequence:0};
 function currentCatalog(){return state.catalogSnapshot||catalog}
 function modelInfo(type=state.type,number=state.model){return currentCatalog().models.find(m=>m.type===type&&m.number===number)}
 function modelSummary(type=state.type,number=state.model){
@@ -54,7 +54,7 @@ function renderManagerFooter(){
 async function openSettings(){
  if($('settings').open)return;
  catalogLoadSequence++;
- manager.draft=null;manager.dirty=false;manager.loaded=false;manager.groups=[];$('settings').showModal();renderManager();await reloadCatalog(false);
+ manager.draft=null;manager.dirty=false;manager.loaded=false;manager.tab='models';manager.groups=[];$('settings').showModal();renderManager();await reloadCatalog(false);
 }
 function closeSettings(){
  if(manager.saving)return;

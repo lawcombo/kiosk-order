@@ -38,6 +38,8 @@ try{
  assert.equal(await page.locator('#saveHistoryButton').textContent(),'이력 저장');
  const initial=await page.evaluate(()=>calc().total);
  await openManager(page);
+ assert.equal(await page.getByRole('tab',{name:/모델 구성/}).getAttribute('aria-selected'),'true');
+ await page.getByRole('tab',{name:/필수항목/}).click();
  await page.getByRole('button',{name:'+ 필수항목 추가',exact:true}).click();
  const addedRequired=page.locator('.manager-part-row').last(),requiredId=await addedRequired.getAttribute('data-required-row');
  await addedRequired.getByLabel('필수항목명',{exact:true}).fill('관리 시험 필수품');
@@ -85,7 +87,7 @@ try{
  await page.getByRole('button',{name:'추가옵션 구성 내려받기',exact:true}).click();assert.ok((await page.locator('#optionsCatalogPaper').textContent()).includes('관리 시험 장치'));await page.locator('#optionsCatalogPreview').getByRole('button',{name:'닫기',exact:true}).click();
  await page.locator('[data-key="site"]').fill('관리 변경 전 신청서');await page.locator('#saveHistoryButton').click();await page.waitForFunction(()=>document.getElementById('saveHistoryStatus').textContent.startsWith('저장 완료'));
  const historical=files.get('history.json');assert.ok(JSON.parse(historical).entries[0].state.catalogSnapshot.parts.some(p=>p.id===optionPartId));
- await openManager(page);await page.getByRole('tab',{name:/추가 옵션/}).click();await page.getByRole('button',{name:/시험 옵션/}).first().click();await page.locator(`[data-option-row="${optionId}"]`).getByRole('button',{name:/제거/}).click();await page.getByRole('tab',{name:/필수항목/}).click();await page.locator(`[data-required-row="${requiredId}"]`).getByRole('button',{name:/제거/}).click();await page.locator('[data-required-row="g8"]').getByLabel('금액',{exact:true}).fill('200000');await saveManager(page);await page.locator('#closeSettingsButton').click();
+ await openManager(page);assert.equal(await page.getByRole('tab',{name:/모델 구성/}).getAttribute('aria-selected'),'true');await page.getByRole('tab',{name:/추가 옵션/}).click();await page.getByRole('button',{name:/시험 옵션/}).first().click();await page.locator(`[data-option-row="${optionId}"]`).getByRole('button',{name:/제거/}).click();await page.getByRole('tab',{name:/필수항목/}).click();await page.locator(`[data-required-row="${requiredId}"]`).getByRole('button',{name:/제거/}).click();await page.locator('[data-required-row="g8"]').getByLabel('금액',{exact:true}).fill('200000');await saveManager(page);await page.locator('#closeSettingsButton').click();
  assert.equal(files.get('history.json'),historical);assert.ok(!JSON.parse(files.get('parts.json')).parts.some(p=>p.id===optionPartId||p.id===requiredId));
  await page.getByRole('button',{name:'이력보기',exact:true}).click();await page.waitForFunction(()=>!historyView.busy);await page.locator('.history-load').first().click();await page.waitForFunction(()=>!document.getElementById('historyDialog').open);
  assert.equal(await page.evaluate(()=>calc().base.find(p=>p.id==='g8').price),100000);assert.equal(await page.evaluate(id=>calc().base.find(p=>p.id===id).qty,optionPartId),3);assert.equal(await page.evaluate(id=>calc().base.find(p=>p.id===id).qty,requiredId),2);
