@@ -95,6 +95,11 @@ test('all kiosk models omit obsolete bracket, card issuer and AI BOX warnings',(
  for(const type of ['general','slim'])for(const model of [1,2,3,4]){h.run(`state.type='${type}';state.model=${model}`);const messages=h.json('warnings(calc())');for(const message of obsolete)assert.ok(!messages.includes(message),type+model+' still shows '+message)}
 });
 
+test('model cost breakdown always shows fixed parts, their subtotal and model equipment sections',()=>{
+ const h=app();
+ for(const type of ['general','slim']){h.run(`state.type='${type}';state.model=1`);const markup=h.json('breakdown(baseParts())'),label=type==='general'?'일반형':'슬림형';assert.ok(markup.includes(label+' 고정 부품'));assert.ok(markup.includes(label+' 고정 부품 소계'));assert.ok(markup.includes('모델별 포함 장비'));assert.ok(markup.includes('모델 기본 원가 합계'));assert.ok(!markup.includes('toggleFixed()'))}
+});
+
 test('old histories restore the original configuration and new histories preserve custom configurations',()=>{
  const h=app();h.run(`const originalState={...fresh(),type:'general',model:1,info:{site:'이전 이력',date:'2026-09-01'},overrides:{g8:{price:99}}};const modified=structuredClone(catalog);modified.models[0].items=modified.models[0].items.filter(row=>row.partId!=='g8');applyCatalog(modified,{replaceOrder:true});restoreOrder(originalState)`);
  assert.equal(h.json("calc().base.find(p=>p.id==='g8').price"),99);

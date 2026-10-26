@@ -38,6 +38,7 @@ try{
  assert.equal(await page.locator('#saveHistoryButton').textContent(),'이력 저장');
  const initial=await page.evaluate(()=>calc().total);
  for(const type of ['general','slim'])for(const model of [1,2,3,4]){await page.evaluate(([kind,value])=>{state.type=kind;state.model=value;render()},[type,model]);const messages=await page.locator('#warnings').textContent();for(const obsolete of ['슬림형 브라켓은 잠정단가 적용','카드발행기: 도어락 연동·장착 부속 확인','AI BOX의 녹화·저장·조회 구성 확인'])assert.ok(!messages.includes(obsolete))}await page.evaluate(()=>{state.type='general';state.model=1;render()});
+ for(const type of ['general','slim']){await page.evaluate(kind=>{state.type=kind;state.model=1;state.showCost=true;render()},type);const breakdown=page.locator('#costBreakdown'),label=type==='general'?'일반형':'슬림형',text=await breakdown.textContent();assert.ok(text.includes(label+' 고정 부품'));assert.ok(text.includes(label+' 고정 부품 소계'));assert.deepEqual(await breakdown.locator('.breakdown-section').allTextContents(),[label+' 고정 부품','모델별 포함 장비']);assert.equal(await breakdown.getByRole('button',{name:/고정/}).count(),0)}await page.evaluate(()=>{state.type='general';state.model=1;state.showCost=false;render()});
  await openManager(page);
  assert.equal(await page.getByRole('tab',{name:/모델 구성/}).getAttribute('aria-selected'),'true');
  await page.getByRole('tab',{name:/필수항목/}).click();
