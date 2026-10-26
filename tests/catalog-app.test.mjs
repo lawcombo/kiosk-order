@@ -100,6 +100,16 @@ test('model cost breakdown always shows fixed parts, their subtotal and model eq
  for(const type of ['general','slim']){h.run(`state.type='${type}';state.model=1`);const markup=h.json('breakdown(baseParts())'),label=type==='general'?'일반형':'슬림형';assert.ok(markup.includes(label+' 고정 부품'));assert.ok(markup.includes(label+' 고정 부품 소계'));assert.ok(markup.includes('모델별 포함 장비'));assert.ok(markup.includes('모델별 포함 장비 소계'));assert.ok(markup.includes('모델 기본 원가 합계'));assert.ok(!markup.includes('toggleFixed()'));assert.ok(!markup.includes('카드토출기는 함체, NVR은 저장용 HDD를 함께 포함합니다.'))}
 });
 
+test('catalog cover splits general and slim summaries without the old guide',()=>{
+ const h=app(),markup=h.json('catalogMarkup()'),cover=markup.slice(0,markup.indexOf('</article>'));
+ assert.ok(!cover.includes('원가 구성 기준'));
+ assert.ok(cover.includes('일반형 모델별 원가 요약'));
+ assert.ok(cover.includes('슬림형 모델별 원가 요약'));
+ assert.ok(cover.indexOf('일반형 모델별 원가 요약')<cover.indexOf('슬림형 모델별 원가 요약'));
+ assert.equal((cover.match(/<table class="req-table">/g)||[]).length,2);
+ assert.ok(!cover.includes('<th>제품 유형</th>'));
+});
+
 test('field emphasis colors only selected values and survives history snapshots',()=>{
  const h=app();h.run(`state.info={...state.info,applicant:'홍길동 / 운영팀',site:'강조 숙박',notes:'긴급 설치'};state.infoEmphasis={applicant:true,notes:true}`);
  for(const markup of [h.json('requestMarkup()'),h.json('emailMarkup()')]){
