@@ -100,6 +100,20 @@ test('model cost breakdown always shows fixed parts, their subtotal and model eq
  for(const type of ['general','slim']){h.run(`state.type='${type}';state.model=1`);const markup=h.json('breakdown(baseParts())'),label=type==='general'?'일반형':'슬림형';assert.ok(markup.includes(label+' 고정 부품'));assert.ok(markup.includes(label+' 고정 부품 소계'));assert.ok(markup.includes('모델별 포함 장비'));assert.ok(markup.includes('모델별 포함 장비 소계'));assert.ok(markup.includes('모델 기본 원가 합계'));assert.ok(!markup.includes('toggleFixed()'));assert.ok(!markup.includes('카드토출기는 함체, NVR은 저장용 HDD를 함께 포함합니다.'))}
 });
 
+test('field emphasis colors only selected values and survives history snapshots',()=>{
+ const h=app();h.run(`state.info={...state.info,applicant:'홍길동 / 운영팀',site:'강조 숙박',notes:'긴급 설치'};state.infoEmphasis={applicant:true,notes:true}`);
+ for(const markup of [h.json('requestMarkup()'),h.json('emailMarkup()')]){
+  assert.ok(markup.includes('신청자 / 소속'));
+  assert.ok(markup.includes('<span class="info-emphasis" style="color:#c62828;font-weight:700">홍길동 / 운영팀</span>'));
+  assert.ok(markup.includes('<span class="info-emphasis" style="color:#c62828;font-weight:700">긴급 설치</span>'));
+  assert.ok(markup.includes('숙박업소명'));
+  assert.ok(markup.includes('강조 숙박'));
+  assert.ok(!markup.includes('<span class="info-emphasis" style="color:#c62828;font-weight:700">강조 숙박</span>'));
+ }
+ h.run('const emphasizedSnapshot=historySnapshot();resetRequest();restoreOrder(emphasizedSnapshot)');
+ assert.deepEqual(h.json('state.infoEmphasis'),{applicant:true,notes:true});
+});
+
 test('old histories restore the original configuration and new histories preserve custom configurations',()=>{
  const h=app();h.run(`const originalState={...fresh(),type:'general',model:1,info:{site:'이전 이력',date:'2026-09-01'},overrides:{g8:{price:99}}};const modified=structuredClone(catalog);modified.models[0].items=modified.models[0].items.filter(row=>row.partId!=='g8');applyCatalog(modified,{replaceOrder:true});restoreOrder(originalState)`);
  assert.equal(h.json("calc().base.find(p=>p.id==='g8').price"),99);

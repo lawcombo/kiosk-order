@@ -107,6 +107,11 @@ export function validateState(input) {
     if (typeof value !== 'string' || value.length > (key === 'notes' ? 8000 : 500)) throw new ApiError(400, '신청 정보의 길이나 형식을 확인해주세요.');
     return [key, value];
   }));
+  const rawInfoEmphasis = input.infoEmphasis ?? {};
+  if (!object(rawInfoEmphasis) || Object.entries(rawInfoEmphasis).some(([key, value]) => !INFO_KEYS.includes(key) || typeof value !== 'boolean')) {
+    throw new ApiError(400, '신청 정보 강조 설정이 올바르지 않습니다.');
+  }
+  const infoEmphasis = Object.fromEntries(Object.entries(rawInfoEmphasis).filter(([, value]) => value));
   if (Object.keys(input.options).length > 100 || Object.keys(input.overrides).length > 200) throw new ApiError(400, '품목 데이터가 너무 많습니다.');
   const options = Object.fromEntries(Object.entries(input.options).map(([key, value]) => {
     if (!/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(key) || ['constructor', 'prototype'].includes(key) || !object(value) || !integer(value.qty, 0, 10000)) {
@@ -132,7 +137,7 @@ export function validateState(input) {
     return [key, fields];
   }));
   const catalogSnapshot = input.catalogSnapshot ? validateCatalog(input.catalogSnapshot, message => { throw new ApiError(400, message); }) : undefined;
-  return { type: input.type, model: input.model, qty: input.qty, van: input.van, priceDisclosure: input.priceDisclosure === 'Y' ? 'Y' : 'N', optionQtyVersion: 2, info, options, overrides, pn: {}, showCost: false, showFixed: false, ...(catalogSnapshot ? { catalogSnapshot } : {}) };
+  return { type: input.type, model: input.model, qty: input.qty, van: input.van, priceDisclosure: input.priceDisclosure === 'Y' ? 'Y' : 'N', optionQtyVersion: 2, info, infoEmphasis, options, overrides, pn: {}, showCost: false, showFixed: false, ...(catalogSnapshot ? { catalogSnapshot } : {}) };
 }
 
 async function readJson(request) {
