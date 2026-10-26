@@ -4,6 +4,7 @@ import { createHistoryHandler } from '../history-api/worker.mjs';
 
 const origin = 'https://lawcombo.github.io';
 const env = { GITHUB_TOKEN: 'github_pat_TestTokenNotARealSecret', ALLOWED_ORIGINS: origin };
+const emptyList = { items: [], page: 1, pageSize: 10, total: 0, totalPages: 1, canDelete: true, nextCursor: null };
 const validState = () => ({ type: 'equipment', model: 1, qty: 1, van: 'NICE', priceDisclosure: 'Y', options: { ptz: { qty: 2, on: true } }, info: { site: '동해 숙박 <시험>', date: '2026-10-23', install: '2026-11-01', installTime: '14:30', notes: '안내 사항\n둘째 줄' }, overrides: { g26: { price: 132000, pn: 'KI00672', name: 'PTZ 카메라', spec: '당시 사양' } } });
 
 export function mockGithub() {
@@ -37,7 +38,7 @@ export function mockGithub() {
 
 test('empty repository lists no history; missing secret never fakes a save', async () => {
   const mock = mockGithub();
-  assert.deepEqual(await (await mock.request()).json(), { items: [], nextCursor: null });
+  assert.deepEqual(await (await mock.request()).json(), emptyList);
   const response = await mock.request('', 'POST', { schemaVersion: 1, state: validState() }, { ALLOWED_ORIGINS: origin });
   assert.equal(response.status, 503);
   assert.equal(mock.files.size, 0);
@@ -69,11 +70,18 @@ test('saves append to a single file; listing is newest-first and paginated', asy
   for (let i = 0; i < 25; i++) assert.equal((await mock.request('', 'POST', { schemaVersion: 1, state: validState() })).status, 201);
   mock.files.set('index.html', '<html>unchanged</html>');
   const first = await (await mock.request()).json();
-  const second = await (await mock.request('?before=' + encodeURIComponent(first.nextCursor))).json();
-  assert.equal(first.items.length, 20);
-  assert.equal(second.items.length, 5);
-  assert.equal(second.nextCursor, null);
-  assert.equal(new Set([...first.items, ...second.items].map(item => item.id)).size, 25);
+  const second = await (await mock.request('?page=2')).json();
+  const third = await (await mock.request('?page=3')).json();
+  assert.equal(first.items.length, 10);
+  assert.equal(second.items.length, 10);
+  assert.equal(third.items.length, 5);
+  assert.equal(third.nextCursor, null);
+  assert.equal(first.total, 25);
+  assert.equal(first.totalPages, 3);
+  assert.equal(second.page, 2);
+  assert.deepEqual((await (await mock.request('?page=99')).json()).items, third.items);
+  assert.deepEqual((await (await mock.request('?before=' + encodeURIComponent(first.nextCursor))).json()).items, second.items);
+  assert.equal(new Set([...first.items, ...second.items, ...third.items].map(item => item.id)).size, 25);
   assert.ok(first.items[0].savedAt > second.items[0].savedAt);
   assert.equal(mock.files.get('index.html'), '<html>unchanged</html>');
   assert.equal(JSON.parse(mock.files.get('history.json')).entries.length, 25);
@@ -87,6 +95,7 @@ test('unapproved origins, traversal, invalid payloads and methods cannot write',
   assert.equal((await mock.request('', 'DELETE')).status, 405);
   assert.equal((await mock.request('/invalid.json')).status, 400);
   assert.equal((await mock.request('?before=invalid')).status, 400);
+  for (const value of ['0', '-1', '1.5', 'abc', '']) assert.equal((await mock.request('?page=' + value)).status, 400);
   assert.equal((await mock.request('', 'POST', { schemaVersion: 2, state: validState() })).status, 400);
   const badQuantity = validState(); badQuantity.options.ptz.qty = -1;
   assert.equal((await mock.request('', 'POST', { schemaVersion: 1, state: badQuantity })).status, 400);
@@ -103,6 +112,7 @@ test('CORS preflight is scoped to configured origins; error responses hide secre
   const preflight = await mock.request('', 'OPTIONS');
   assert.equal(preflight.status, 204);
   assert.equal(preflight.headers.get('Access-Control-Allow-Origin'), origin);
+  assert.match(preflight.headers.get('Access-Control-Allow-Methods'), /DELETE/);
   assert.equal((await mock.request('', 'OPTIONS', undefined, env, { Origin: 'https://other.example' })).status, 403);
   mock.fail(403);
   const denied = await mock.request();
@@ -174,7 +184,7 @@ test('default outbound fetch preserves the runtime receiver', async () => {
     const handler = createHistoryHandler();
     const response = await handler(new Request('https://history.example/api/history'), env);
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { items: [], nextCursor: null });
+    assert.deepEqual(await response.json(), emptyList);
   } finally { globalThis.fetch = original; }
 });
 
@@ -215,4 +225,85 @@ test('GitHub redirects are rejected without forwarding the token to another host
   const response = await handler(new Request('https://history.example/api/history'), env);
   assert.equal(response.status, 502);
   assert.equal(calls, 1);
+});
+
+test('deleting one entry preserves the file, all other snapshots and unrelated files', async () => {
+  const mock = mockGithub();
+  for (let i = 0; i < 3; i++) await mock.request('', 'POST', { schemaVersion: 1, state: validState() });
+  const before = JSON.parse(mock.files.get('history.json')).entries;
+  mock.files.set('index.html', '<html>unchanged</html>');
+  const response = await mock.request('/' + before[1].id, 'DELETE');
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).deleted, true);
+  assert.deepEqual(JSON.parse(mock.files.get('history.json')).entries, [before[0], before[2]]);
+  assert.equal(mock.files.get('index.html'), '<html>unchanged</html>');
+  assert.equal((await mock.request('/' + before[1].id)).status, 404);
+  assert.equal(mock.calls.filter(call => call.init.method === 'DELETE').length, 0);
+});
+
+test('deleting the final entry keeps an empty history.json instead of deleting the file', async () => {
+  const mock = mockGithub();
+  const saved = await (await mock.request('', 'POST', { schemaVersion: 1, state: validState() })).json();
+  assert.equal((await mock.request('/' + saved.id, 'DELETE')).status, 200);
+  assert.equal(mock.files.has('history.json'), true);
+  assert.deepEqual(JSON.parse(mock.files.get('history.json')), { schemaVersion: 1, entries: [] });
+  assert.deepEqual(await (await mock.request()).json(), emptyList);
+  const writes = mock.calls.filter(call => call.init.method === 'PUT').length;
+  assert.equal((await mock.request('/' + saved.id, 'DELETE')).status, 404);
+  assert.equal(mock.calls.filter(call => call.init.method === 'PUT').length, writes);
+});
+
+test('deletion requires an allowed origin, a valid id and the configured secret', async () => {
+  const mock = mockGithub();
+  const saved = await (await mock.request('', 'POST', { schemaVersion: 1, state: validState() })).json();
+  const previous = mock.files.get('history.json');
+  assert.equal((await mock.request('/' + saved.id, 'DELETE', undefined, env, {Origin:''})).status, 403);
+  assert.equal((await mock.request('/' + saved.id, 'DELETE', undefined, env, {Origin:'https://other.example'})).status, 403);
+  assert.equal((await mock.request('/' + saved.id, 'DELETE', undefined, {})).status, 503);
+  assert.equal((await mock.request('/invalid', 'DELETE')).status, 400);
+  assert.equal((await mock.request('', 'DELETE')).status, 405);
+  assert.equal(mock.files.get('history.json'), previous);
+});
+
+test('a concurrent save survives a deletion SHA retry', async () => {
+  const mock = mockGithub();
+  const removed = await (await mock.request('', 'POST', { schemaVersion: 1, state: validState() })).json();
+  const kept = await (await mock.request('', 'POST', { schemaVersion: 1, state: validState() })).json();
+  let added;
+  mock.onNextWrite(async () => { added = await (await mock.request('', 'POST', { schemaVersion: 1, state: validState() })).json(); });
+  assert.equal((await mock.request('/' + removed.id, 'DELETE')).status, 200);
+  assert.deepEqual(JSON.parse(mock.files.get('history.json')).entries.map(item => item.id), [kept.id, added.id]);
+});
+
+test('concurrent deletions remove only their selected entries', async () => {
+  const mock = mockGithub(), records = [];
+  for (let i = 0; i < 3; i++) records.push(await (await mock.request('', 'POST', { schemaVersion: 1, state: validState() })).json());
+  mock.onNextWrite(async () => { assert.equal((await mock.request('/' + records[1].id, 'DELETE')).status, 200); });
+  assert.equal((await mock.request('/' + records[0].id, 'DELETE')).status, 200);
+  assert.deepEqual(JSON.parse(mock.files.get('history.json')).entries.map(item => item.id), [records[2].id]);
+});
+
+test('deleting the sole item on the final page moves the requested page to the remaining last page', async () => {
+  const mock = mockGithub();
+  for (let i = 0; i < 11; i++) await mock.request('', 'POST', { schemaVersion: 1, state: validState() });
+  const second = await (await mock.request('?page=2')).json();
+  assert.equal(second.items.length, 1);
+  assert.equal((await mock.request('/' + second.items[0].id, 'DELETE')).status, 200);
+  const after = await (await mock.request('?page=2')).json();
+  assert.equal(after.page, 1);
+  assert.equal(after.totalPages, 1);
+  assert.equal(after.total, 10);
+  assert.equal(after.items.length, 10);
+});
+
+test('corrupted history and failed GitHub writes are never reported as successful deletions', async () => {
+  const mock = mockGithub();
+  const saved = await (await mock.request('', 'POST', { schemaVersion: 1, state: validState() })).json();
+  const previous = mock.files.get('history.json');
+  mock.fail(403, 'PUT');
+  assert.equal((await mock.request('/' + saved.id, 'DELETE')).status, 503);
+  assert.equal(mock.files.get('history.json'), previous);
+  mock.files.set('history.json', 'not JSON');
+  assert.equal((await mock.request('/' + saved.id, 'DELETE')).status, 502);
+  assert.equal(mock.files.get('history.json'), 'not JSON');
 });

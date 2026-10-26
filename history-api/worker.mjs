@@ -1,6 +1,6 @@
 const MAX_BYTES = 128 * 1024;
 const MAX_HISTORY_BYTES = 900 * 1024;
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 const RECORD_ID = /^\d{8}T\d{9}Z_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const DEFAULT_ORIGINS = 'https://lawcombo.github.io,http://127.0.0.1:4173,http://localhost:4173';
 const INFO_KEYS = ['applicant', 'date', 'site', 'business', 'contact', 'install', 'installTime', 'address', 'nickname', 'catid', 'sw', 'pms', 'delivery', 'notes'];
@@ -119,14 +119,14 @@ export function createHistoryHandler({ fetch: upstreamFetch = (input, init) => g
       if (origin && !allowed.includes(origin)) throw new ApiError(403, '이 주소에서는 이력 서비스를 사용할 수 없습니다.');
       if (request.method === 'OPTIONS') {
         if (!origin || !allowed.includes(origin)) throw new ApiError(403, '허용되지 않은 요청입니다.');
-        return new Response(null, { status: 204, headers: { ...headers, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '600' } });
+        return new Response(null, { status: 204, headers: { ...headers, 'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '600' } });
       }
       const url = new URL(request.url);
       const isList = url.pathname === '/api/history' || url.pathname === '/api/history/';
       const detail = /^\/api\/history\/([^/]+)$/.exec(url.pathname);
       if (!isList && !detail) throw new ApiError(404, '요청한 기능을 찾을 수 없습니다.');
-      if (!['GET', 'POST'].includes(request.method) || (detail && request.method !== 'GET')) throw new ApiError(405, '지원하지 않는 요청입니다.');
-      if (request.method === 'POST' && !origin) throw new ApiError(403, '허용된 페이지에서 저장해주세요.');
+      if (!(isList ? ['GET', 'POST'] : ['GET', 'DELETE']).includes(request.method)) throw new ApiError(405, '지원하지 않는 요청입니다.');
+      if (['POST', 'DELETE'].includes(request.method) && !origin) throw new ApiError(403, '허용된 페이지에서 요청해주세요.');
       const owner = env.GITHUB_OWNER || 'lawcombo', repo = env.GITHUB_REPO || 'kiosk-order', branch = env.GITHUB_BRANCH || 'main';
       const token = typeof env.GITHUB_TOKEN === 'string' ? env.GITHUB_TOKEN.trim() : '';
       if (!token || !/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repo)) throw new ApiError(503, '이력 저장 서비스 설정이 아직 완료되지 않았습니다.');
@@ -169,6 +169,21 @@ export function createHistoryHandler({ fetch: upstreamFetch = (input, init) => g
         if (new TextEncoder().encode(text).byteLength > MAX_HISTORY_BYTES) throw new ApiError(502, 'history.json 파일 용량이 한도를 초과했습니다.');
         return { data: parseHistory(text), sha: file.sha };
       }
+      async function updateHistory(change, message) {
+        // Re-read on a SHA conflict so a save or deletion never overwrites another user's change.
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const { data, sha } = await loadHistoryFile();
+          const value = change(data);
+          const serialized = JSON.stringify(data) + '\n';
+          if (new TextEncoder().encode(serialized).byteLength > MAX_HISTORY_BYTES) throw new ApiError(413, '이력 파일 용량이 한도에 도달했습니다. 기존 이력을 백업한 후 관리자에게 문의해주세요.');
+          try {
+            const result = await github('/contents/history.json', { method: 'PUT', body: JSON.stringify({ message, branch, content: encode(serialized), ...(sha ? { sha } : {}) }) });
+            return { value, commit: result.commit?.sha };
+          } catch (error) {
+            if (!(error instanceof ApiError) || error.status !== 409 || attempt === 2) throw error;
+          }
+        }
+      }
       if (request.method === 'POST') {
         const body = await readJson(request);
         if (!object(body) || body.schemaVersion !== 1) throw new ApiError(400, '지원하지 않는 저장 형식입니다.');
@@ -176,24 +191,21 @@ export function createHistoryHandler({ fetch: upstreamFetch = (input, init) => g
         const id = `${savedAt.replace(/[-:.]/g, '')}_${uuid()}`;
         const record = { schemaVersion: 1, id, savedAt, state };
         if (new TextEncoder().encode(JSON.stringify(record)).byteLength > MAX_BYTES) throw new ApiError(413, '저장할 내용이 너무 큽니다.');
-        // GitHub checks the current SHA. Re-read on conflict so simultaneous saves keep both entries.
-        for (let attempt = 0; attempt < 3; attempt++) {
-          const { data, sha } = await loadHistoryFile();
-          data.entries.push(record);
-          const serialized = JSON.stringify(data) + '\n';
-          if (new TextEncoder().encode(serialized).byteLength > MAX_HISTORY_BYTES) throw new ApiError(413, '이력 파일 용량이 한도에 도달했습니다. 기존 이력을 백업한 후 관리자에게 문의해주세요.');
-          try {
-            const result = await github('/contents/history.json', { method: 'PUT', body: JSON.stringify({ message: 'Save kiosk request history [skip ci]', branch, content: encode(serialized), ...(sha ? { sha } : {}) }) });
-            return json({ ...summary(record), commit: result.commit?.sha }, 201);
-          } catch (error) {
-            if (!(error instanceof ApiError) || error.status !== 409 || attempt === 2) throw error;
-          }
-        }
+        const result = await updateHistory(data => data.entries.push(record), 'Save kiosk request history [skip ci]');
+        return json({ ...summary(record), commit: result.commit }, 201);
       }
       if (detail) {
         let id;
         try { id = decodeURIComponent(detail[1]); } catch { throw new ApiError(400, '이력 번호가 올바르지 않습니다.'); }
         if (!RECORD_ID.test(id)) throw new ApiError(400, '이력 번호가 올바르지 않습니다.');
+        if (request.method === 'DELETE') {
+          const result = await updateHistory(data => {
+            const index = data.entries.findIndex(item => item.id === id);
+            if (index === -1) throw new ApiError(404, '이미 삭제됐거나 찾을 수 없는 이력입니다.');
+            data.entries.splice(index, 1);
+          }, 'Delete kiosk request history entry [skip ci]');
+          return json({ id, deleted: true, commit: result.commit });
+        }
         const { data } = await loadHistoryFile();
         const record = data.entries.find(item => item.id === id);
         if (!record) throw new ApiError(404, '저장 이력을 찾을 수 없습니다.');
@@ -201,11 +213,15 @@ export function createHistoryHandler({ fetch: upstreamFetch = (input, init) => g
       }
       const cursor = url.searchParams.get('before');
       if (cursor && !RECORD_ID.test(cursor)) throw new ApiError(400, '목록 위치가 올바르지 않습니다.');
+      const requestedPage = url.searchParams.get('page') ?? '1';
+      if (!/^[1-9]\d{0,6}$/.test(requestedPage) || (cursor && url.searchParams.has('page'))) throw new ApiError(400, '페이지 번호가 올바르지 않습니다.');
       const { data } = await loadHistoryFile();
       const entries = data.entries.map(summary)
         .filter(item => !cursor || item.id < cursor).sort((a, b) => a.id === b.id ? 0 : a.id < b.id ? 1 : -1);
-      const items = entries.slice(0, PAGE_SIZE);
-      return json({ items, nextCursor: entries.length > PAGE_SIZE ? items.at(-1).id : null });
+      const total = entries.length, totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      const page = Math.min(Number(requestedPage), totalPages), start = (page - 1) * PAGE_SIZE;
+      const items = entries.slice(start, start + PAGE_SIZE);
+      return json({ items, page, pageSize: PAGE_SIZE, total, totalPages, canDelete: true, nextCursor: start + PAGE_SIZE < total ? items.at(-1).id : null });
     } catch (error) {
       return json({ error: error instanceof ApiError ? error.message : '이력 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' }, error instanceof ApiError ? error.status : 500);
     }
