@@ -53,6 +53,10 @@ try{
  await option.getByLabel('옵션 P/N',{exact:true}).fill('');
  await option.getByLabel('옵션 금액',{exact:true}).fill('');
  await option.getByLabel('옵션 단위',{exact:true}).selectOption('대');
+ const newGroupBox=await page.locator('.manager-new-group').boundingBox(),groupTabsBox=await page.locator('.manager-group-tabs').boundingBox(),currentGroupBox=await page.locator('.manager-current-group').boundingBox();
+ assert.ok(newGroupBox.y<groupTabsBox.y&&groupTabsBox.y<currentGroupBox.y,'option group controls follow create, tabs, current-group order');
+ const currentControls=await page.locator('.manager-current-group').locator('input,button').evaluateAll(elements=>elements.map(el=>Math.round(el.getBoundingClientRect().top)));
+ assert.equal(new Set(currentControls).size,1,'current group name, rename and add-option controls stay on one desktop row');
  const optionPartId=await page.evaluate(id=>manager.draft.options.find(o=>o.id===id).ids[0],optionId);
  await page.getByRole('tab',{name:/모델 구성/}).click();
  assert.ok((await page.locator('.manager-readonly').textContent()).includes('관리 시험 필수품'));
