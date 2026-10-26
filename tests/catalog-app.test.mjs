@@ -97,7 +97,7 @@ test('all kiosk models omit obsolete bracket, card issuer and AI BOX warnings',(
 
 test('model cost breakdown always shows fixed parts, their subtotal and model equipment sections',()=>{
  const h=app();
- for(const type of ['general','slim']){h.run(`state.type='${type}';state.model=1`);const markup=h.json('breakdown(baseParts())'),label=type==='general'?'일반형':'슬림형';assert.ok(markup.includes(label+' 고정 부품'));assert.ok(markup.includes(label+' 고정 부품 소계'));assert.ok(markup.includes('모델별 포함 장비'));assert.ok(markup.includes('모델 기본 원가 합계'));assert.ok(!markup.includes('toggleFixed()'))}
+ for(const type of ['general','slim']){h.run(`state.type='${type}';state.model=1`);const markup=h.json('breakdown(baseParts())'),label=type==='general'?'일반형':'슬림형';assert.ok(markup.includes(label+' 고정 부품'));assert.ok(markup.includes(label+' 고정 부품 소계'));assert.ok(markup.includes('모델별 포함 장비'));assert.ok(markup.includes('모델별 포함 장비 소계'));assert.ok(markup.includes('모델 기본 원가 합계'));assert.ok(!markup.includes('toggleFixed()'));assert.ok(!markup.includes('카드토출기는 함체, NVR은 저장용 HDD를 함께 포함합니다.'))}
 });
 
 test('old histories restore the original configuration and new histories preserve custom configurations',()=>{
