@@ -8,7 +8,7 @@ const host = '127.0.0.1', port = Number(process.env.PORT || 4173);
 http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${host}:${port}`);
-    if (url.pathname.startsWith('/api/history')) {
+    if (url.pathname.startsWith('/api/history') || url.pathname.startsWith('/api/catalog')) {
       const chunks = [];
       let size = 0;
       for await (const chunk of req) {

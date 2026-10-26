@@ -1,14 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createHistoryHandler } from '../history-api/worker.mjs';
 
 const origin = 'https://lawcombo.github.io';
 const env = { GITHUB_TOKEN: 'github_pat_TestTokenNotARealSecret', ALLOWED_ORIGINS: origin };
 const emptyList = { items: [], page: 1, pageSize: 10, total: 0, totalPages: 1, canDelete: true, nextCursor: null };
+const defaultCatalog = () => JSON.parse(readFileSync(new URL('../index.html', import.meta.url), 'utf8').match(/id="catalogData">([\s\S]*?)<\/script>/)[1]);
 const validState = () => ({ type: 'equipment', model: 1, qty: 1, van: 'NICE', priceDisclosure: 'Y', options: { ptz: { qty: 2, on: true } }, info: { site: '동해 숙박 <시험>', date: '2026-10-23', install: '2026-11-01', installTime: '14:30', notes: '안내 사항\n둘째 줄' }, overrides: { g26: { price: 132000, pn: 'KI00672', name: 'PTZ 카메라', spec: '당시 사양' } } });
 
 export function mockGithub() {
-  const files = new Map(), calls = [];
+  const files = new Map(), calls = [], revisions = new Map();
   let failure = null, sequence = 0, revision = 0, conflictHook = null;
   const fetch = async (url, init) => {
     calls.push({ url, init });
@@ -17,23 +19,25 @@ export function mockGithub() {
     assert.equal(init.headers.Authorization, `Bearer ${env.GITHUB_TOKEN}`);
     if (failure && (!failure.method || failure.method === (init.method || 'GET'))) { const status = failure.status; failure = null; return Response.json({ message: 'Do not leak upstream error or tokens' }, { status }); }
     const path = new URL(url).pathname.split('/contents/')[1];
-    assert.equal(path, 'history.json');
+    assert.ok(['history.json', 'parts.json'].includes(path));
     if (init.method === 'PUT') {
       const body = JSON.parse(init.body);
       assert.equal(body.branch, 'main');
       if (conflictHook) { const hook = conflictHook; conflictHook = null; await hook(); }
-      if (files.has(path) ? body.sha !== `sha-${revision}` : !!body.sha) return Response.json({}, { status: files.has(path) ? 409 : 422 });
+      if (files.has(path) ? body.sha !== (revisions.get(path) || 'sha-0') : !!body.sha) return Response.json({}, { status: files.has(path) ? 409 : 422 });
       files.set(path, Buffer.from(body.content, 'base64').toString('utf8'));
       revision++;
-      return Response.json({ commit: { sha: 'test-commit' } }, { status: 201 });
+      revisions.set(path, `sha-${revision}`);
+      return Response.json({ commit: { sha: 'test-commit' }, content: { sha: `sha-${revision}` } }, { status: 201 });
     }
     if (!files.has(path)) return Response.json({}, { status: 404 });
     const content = files.get(path);
-    return Response.json({ content: Buffer.from(content).toString('base64'), encoding: 'base64', size: Buffer.byteLength(content), sha: `sha-${revision}` });
+    return Response.json({ content: Buffer.from(content).toString('base64'), encoding: 'base64', size: Buffer.byteLength(content), sha: revisions.get(path) || 'sha-0' });
   };
   const handler = createHistoryHandler({ fetch, now: () => new Date(Date.UTC(2026, 9, 23, 1, 2, sequence, 4)), uuid: () => `00000000-0000-4000-8000-${String(++sequence).padStart(12, '0')}` });
   const request = (path = '', method = 'GET', data, config = env, headers = {}) => handler(new Request(`https://history.example/api/history${path}`, { method, headers: { Origin: origin, ...(data === undefined ? {} : { 'Content-Type': 'application/json' }), ...headers }, ...(data === undefined ? {} : { body: JSON.stringify(data) }) }), config);
-  return { files, calls, request, fail(status, method) { failure = { status, method }; }, onNextWrite(hook) { conflictHook = hook; } };
+  const catalogRequest = (method = 'GET', data, config = env, headers = {}) => handler(new Request('https://history.example/api/catalog', { method, headers: { Origin: origin, ...(data === undefined ? {} : { 'Content-Type': 'application/json' }), ...headers }, ...(data === undefined ? {} : { body: JSON.stringify(data) }) }), config);
+  return { files, calls, request, catalogRequest, fail(status, method) { failure = { status, method }; }, onNextWrite(hook) { conflictHook = hook; } };
 }
 
 test('empty repository lists no history; missing secret never fakes a save', async () => {
@@ -306,4 +310,74 @@ test('corrupted history and failed GitHub writes are never reported as successfu
   mock.files.set('history.json', 'not JSON');
   assert.equal((await mock.request('/' + saved.id, 'DELETE')).status, 502);
   assert.equal(mock.files.get('history.json'), 'not JSON');
+});
+
+test('catalog is created and fully replaced independently from saved history', async () => {
+  const mock = mockGithub(), catalog = defaultCatalog();
+  assert.deepEqual(await (await mock.catalogRequest()).json(), { catalog: null, revision: null });
+  const response = await mock.catalogRequest('PUT', { schemaVersion: 1, revision: null, catalog });
+  assert.equal(response.status, 200);
+  const first = await response.json();
+  assert.ok(first.revision);
+  assert.equal(first.catalog.parts.length, 73);
+  assert.equal(first.catalog.models.length, 8);
+  await mock.request('', 'POST', { schemaVersion: 1, state: validState() });
+  const history = mock.files.get('history.json');
+  first.catalog.parts[0].name = '변경된 함체'; first.catalog.parts[0].price = 0; first.catalog.parts[0].pn = '';
+  const changed = await mock.catalogRequest('PUT', { schemaVersion: 1, revision: first.revision, catalog: first.catalog, path: 'index.html' });
+  assert.equal(changed.status, 200);
+  const loaded = await (await mock.catalogRequest()).json();
+  assert.equal(loaded.catalog.parts[0].name, '변경된 함체');
+  assert.equal(loaded.catalog.parts[0].price, 0);
+  assert.equal(loaded.catalog.parts[0].pn, '-');
+  assert.equal(mock.files.get('history.json'), history);
+  assert.equal(mock.files.size, 2);
+});
+
+test('stale catalog revisions never overwrite another editor’s configuration', async () => {
+  const mock = mockGithub();
+  const first = await (await mock.catalogRequest('PUT', { schemaVersion: 1, revision: null, catalog: defaultCatalog() })).json();
+  const other = structuredClone(first.catalog); other.parts[0].name = '다른 사용자 변경';
+  assert.equal((await mock.catalogRequest('PUT', { schemaVersion: 1, revision: first.revision, catalog: other })).status, 200);
+  const before = mock.files.get('parts.json');
+  assert.equal((await mock.catalogRequest('PUT', { schemaVersion: 1, revision: first.revision, catalog: first.catalog })).status, 409);
+  assert.equal(mock.files.get('parts.json'), before);
+});
+
+test('catalog rejects invalid references, duplicate parts, missing models and invalid quantities', async () => {
+  const mock = mockGithub();
+  const changes = [c=>c.models[0].items.push({partId:'missing',qty:1,section:'fixed',van:'ALL'}),c=>c.parts.push(c.parts[0]),c=>c.models.pop(),c=>c.models[0].items[0].qty=0,c=>c.parts[0].price=-1,c=>c.parts[0].name='',c=>c.options[0].ids=['missing'],c=>c.models[0].replacementBaseId='missing'];
+  for (const change of changes) {
+    const catalog = defaultCatalog(); change(catalog);
+    assert.equal((await mock.catalogRequest('PUT', { schemaVersion: 1, revision: null, catalog })).status, 400);
+  }
+  assert.equal(mock.files.size, 0);
+});
+
+test('catalog writes require allowed origins and preserve corrupt files', async () => {
+  const mock = mockGithub(), body = { schemaVersion: 1, revision: null, catalog: defaultCatalog() };
+  assert.equal((await mock.catalogRequest('PUT', body, env, {Origin:''})).status, 403);
+  assert.equal((await mock.catalogRequest('PUT', body, env, {Origin:'https://other.example'})).status, 403);
+  assert.equal((await mock.catalogRequest('DELETE')).status, 405);
+  assert.equal((await mock.catalogRequest('POST', body)).status, 405);
+  mock.files.set('parts.json', 'corrupt');
+  assert.equal((await mock.catalogRequest()).status, 502);
+  assert.equal((await mock.catalogRequest('PUT', body)).status, 502);
+  assert.equal(mock.files.get('parts.json'), 'corrupt');
+});
+
+test('historical configuration and custom part prices survive a master catalog update', async () => {
+  const mock = mockGithub(), catalog = defaultCatalog();
+  catalog.parts.push({id:'p_custom',category:'general',name:'신규 장치',pn:'',price:null,spec:''});
+  catalog.models[0].items.push({partId:'p_custom',qty:2,section:'fixed',van:'ALL'});
+  const state = {...validState(),type:'general',catalogSnapshot:catalog,overrides:{p_custom:{price:0,pn:''}}};
+  const response = await mock.request('', 'POST', { schemaVersion: 1, state });
+  assert.equal(response.status, 201);
+  const saved = await response.json();
+  await mock.catalogRequest('PUT', { schemaVersion: 1, revision: null, catalog: defaultCatalog() });
+  const loaded = await (await mock.request('/'+saved.id)).json();
+  assert.equal(loaded.state.catalogSnapshot.parts.at(-1).id, 'p_custom');
+  assert.equal(loaded.state.catalogSnapshot.models[0].items.at(-1).qty, 2);
+  assert.equal(loaded.state.overrides.p_custom.price, 0);
+  assert.equal(loaded.state.overrides.p_custom.pn, '');
 });

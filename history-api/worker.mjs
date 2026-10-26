@@ -45,6 +45,54 @@ function parseHistory(text) {
 function object(value) { return value && typeof value === 'object' && !Array.isArray(value); }
 function integer(value, min, max) { return Number.isInteger(value) && value >= min && value <= max; }
 
+// This pure validator is also embedded in the single HTML page.
+export function validateCatalog(input, fail = message => { throw new Error(message); }) {
+  const obj = value => value && typeof value === 'object' && !Array.isArray(value);
+  const id = value => typeof value === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value) && !['constructor', 'prototype'].includes(value);
+  const text = (value, max, fallback = '') => {
+    if (value === undefined || value === null) return fallback;
+    if (typeof value !== 'string' || value.length > max) fail('문자열 길이나 형식이 올바르지 않습니다.');
+    return value.trim();
+  };
+  const number = (value, min, max) => Number.isInteger(value) && value >= min && value <= max;
+  if (!obj(input) || input.schemaVersion !== 1 || !Array.isArray(input.parts) || input.parts.length < 1 || input.parts.length > 200 ||
+      !Array.isArray(input.models) || input.models.length !== 8 || !Array.isArray(input.options) || input.options.length > 100) fail('부품·모델 설정 형식이 올바르지 않습니다.');
+  const partIds = new Set();
+  const parts = input.parts.map(p => {
+    if (!obj(p) || !id(p.id) || partIds.has(p.id) || !['general', 'slim', 'common'].includes(p.category)) fail('부품 번호나 구분이 올바르지 않습니다.');
+    const name = text(p.name, 200);
+    if (!name) fail('모든 부품의 품목명을 입력해주세요.');
+    if (p.price !== null && (typeof p.price !== 'number' || !Number.isFinite(p.price) || p.price < 0 || p.price > 1e12)) fail('단가는 0 이상의 숫자 또는 빈칸이어야 합니다.');
+    partIds.add(p.id);
+    return { id: p.id, category: p.category, name, pn: text(p.pn, 200) || '-', spec: text(p.spec, 500), price: p.price };
+  });
+  const modelIds = new Set();
+  const models = input.models.map(m => {
+    if (!obj(m) || !['general', 'slim'].includes(m.type) || !number(m.number, 1, 4) || m.id !== (m.type === 'general' ? 'G' : 'S') + m.number || modelIds.has(m.id) || !Array.isArray(m.items) || m.items.length > 200) fail('8개 모델의 구성 설정이 올바르지 않습니다.');
+    modelIds.add(m.id);
+    const used = new Set();
+    const items = m.items.map(row => {
+      if (!obj(row) || !partIds.has(row.partId) || used.has(row.partId) || !number(row.qty, 1, 10000) || !['fixed', 'model', 'mount'].includes(row.section) || !['ALL', 'NICE', 'KIS'].includes(row.van)) fail('모델에 포함된 품목·수량·VAN 조건을 확인해주세요.');
+      used.add(row.partId);
+      return { partId: row.partId, qty: row.qty, section: row.section, van: row.van };
+    });
+    const replacementBaseId = m.replacementBaseId || null;
+    if (replacementBaseId && !items.some(row => row.partId === replacementBaseId && row.van === 'ALL')) fail('교체 차감 기준은 해당 모델의 공통 포함 품목이어야 합니다.');
+    const title = text(m.title, 100);
+    if (!title) fail('모델 이름을 입력해주세요.');
+    return { id: m.id, type: m.type, number: m.number, title, description: text(m.description, 300), replacementBaseId, items };
+  });
+  const optionIds = new Set();
+  const options = input.options.map(o => {
+    if (!obj(o) || !id(o.id) || optionIds.has(o.id) || !Array.isArray(o.ids) || !o.ids.length || o.ids.length > 10 || new Set(o.ids).size !== o.ids.length || o.ids.some(key => !partIds.has(key))) fail('추가 옵션에 없는 부품이나 중복 번호가 있습니다.');
+    const name = text(o.name, 200);
+    if (!name || !number(o.defaultQty, 1, 10000)) fail('추가 옵션의 이름과 기본 수량을 확인해주세요.');
+    optionIds.add(o.id);
+    return { id: o.id, name, ids: [...o.ids], group: text(o.group, 80) || '추가 장비', unit: text(o.unit, 20) || '개', defaultQty: o.defaultQty, hint: text(o.hint, 300), replacement: o.replacement === true };
+  });
+  return { schemaVersion: 1, parts, models, options };
+}
+
 // Only application data can be saved; clients cannot choose repository paths or commits.
 export function validateState(input) {
   if (!object(input) || !['general', 'slim', 'equipment'].includes(input.type) ||
@@ -67,7 +115,7 @@ export function validateState(input) {
     return [key, { qty: value.qty, on: value.qty > 0 }];
   }));
   const overrides = Object.fromEntries(Object.entries(input.overrides).map(([key, value]) => {
-    if (!/^(?:(?:g|s|c|o|sm)\d+|general-mount)$/.test(key) || !object(value)) throw new ApiError(400, '부품 정보가 올바르지 않습니다.');
+    if (!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(key) || ['constructor', 'prototype'].includes(key) || !object(value)) throw new ApiError(400, '부품 정보가 올바르지 않습니다.');
     const fields = {};
     for (const field of ['pn', 'name', 'spec']) {
       if (value[field] !== undefined) {
@@ -83,7 +131,8 @@ export function validateState(input) {
     }
     return [key, fields];
   }));
-  return { type: input.type, model: input.model, qty: input.qty, van: input.van, priceDisclosure: input.priceDisclosure === 'Y' ? 'Y' : 'N', optionQtyVersion: 2, info, options, overrides, pn: {}, showCost: false, showFixed: false };
+  const catalogSnapshot = input.catalogSnapshot ? validateCatalog(input.catalogSnapshot, message => { throw new ApiError(400, message); }) : undefined;
+  return { type: input.type, model: input.model, qty: input.qty, van: input.van, priceDisclosure: input.priceDisclosure === 'Y' ? 'Y' : 'N', optionQtyVersion: 2, info, options, overrides, pn: {}, showCost: false, showFixed: false, ...(catalogSnapshot ? { catalogSnapshot } : {}) };
 }
 
 async function readJson(request) {
@@ -119,14 +168,15 @@ export function createHistoryHandler({ fetch: upstreamFetch = (input, init) => g
       if (origin && !allowed.includes(origin)) throw new ApiError(403, '이 주소에서는 이력 서비스를 사용할 수 없습니다.');
       if (request.method === 'OPTIONS') {
         if (!origin || !allowed.includes(origin)) throw new ApiError(403, '허용되지 않은 요청입니다.');
-        return new Response(null, { status: 204, headers: { ...headers, 'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '600' } });
+        return new Response(null, { status: 204, headers: { ...headers, 'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '600' } });
       }
       const url = new URL(request.url);
       const isList = url.pathname === '/api/history' || url.pathname === '/api/history/';
+      const isCatalog = url.pathname === '/api/catalog' || url.pathname === '/api/catalog/';
       const detail = /^\/api\/history\/([^/]+)$/.exec(url.pathname);
-      if (!isList && !detail) throw new ApiError(404, '요청한 기능을 찾을 수 없습니다.');
-      if (!(isList ? ['GET', 'POST'] : ['GET', 'DELETE']).includes(request.method)) throw new ApiError(405, '지원하지 않는 요청입니다.');
-      if (['POST', 'DELETE'].includes(request.method) && !origin) throw new ApiError(403, '허용된 페이지에서 요청해주세요.');
+      if (!isList && !detail && !isCatalog) throw new ApiError(404, '요청한 기능을 찾을 수 없습니다.');
+      if (!(isCatalog ? ['GET', 'PUT'] : isList ? ['GET', 'POST'] : ['GET', 'DELETE']).includes(request.method)) throw new ApiError(405, '지원하지 않는 요청입니다.');
+      if (['POST', 'PUT', 'DELETE'].includes(request.method) && !origin) throw new ApiError(403, '허용된 페이지에서 요청해주세요.');
       const owner = env.GITHUB_OWNER || 'lawcombo', repo = env.GITHUB_REPO || 'kiosk-order', branch = env.GITHUB_BRANCH || 'main';
       const token = typeof env.GITHUB_TOKEN === 'string' ? env.GITHUB_TOKEN.trim() : '';
       if (!token || !/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repo)) throw new ApiError(503, '이력 저장 서비스 설정이 아직 완료되지 않았습니다.');
@@ -157,6 +207,24 @@ export function createHistoryHandler({ fetch: upstreamFetch = (input, init) => g
           throw new ApiError(502, code === 'TIMEOUT' ? 'GitHub 연결 시간이 초과됐습니다. 잠시 후 다시 시도해주세요. (TIMEOUT)'
             : `GitHub 요청을 처리하지 못했습니다. 관리자에게 오류 코드를 알려주세요. (${code})`);
         } finally { clearTimeout(timer); }
+      }
+      if (isCatalog) {
+        const file = await github(`/contents/parts.json?ref=${encodeURIComponent(branch)}`, {}, true);
+        let current = null;
+        if (file) {
+          if (file.encoding !== 'base64' || typeof file.content !== 'string' || !file.sha || file.size > MAX_BYTES) throw new ApiError(502, '부품 설정 파일을 읽을 수 없습니다.');
+          try { current = validateCatalog(JSON.parse(decode(file.content))); }
+          catch { throw new ApiError(502, 'parts.json 형식이 올바르지 않습니다. 기존 설정을 확인해주세요.'); }
+        }
+        if (request.method === 'GET') return json({ catalog: current, revision: file?.sha || null });
+        const body = await readJson(request);
+        if (!object(body) || body.schemaVersion !== 1 || !Object.hasOwn(body, 'revision')) throw new ApiError(400, '설정 저장 형식이 올바르지 않습니다.');
+        if (body.revision !== (file?.sha || null)) throw new ApiError(409, '다른 사용자가 설정을 변경했습니다. 변경 내용을 확인한 후 새로 불러와주세요.');
+        const catalog = validateCatalog(body.catalog, message => { throw new ApiError(400, message); });
+        const serialized = JSON.stringify(catalog) + '\n';
+        if (new TextEncoder().encode(serialized).byteLength > MAX_BYTES) throw new ApiError(413, '부품 설정의 용량이 너무 큽니다.');
+        const result = await github('/contents/parts.json', { method: 'PUT', body: JSON.stringify({ message: 'Update kiosk parts and model configuration [skip ci]', branch, content: encode(serialized), ...(file ? { sha: file.sha } : {}) }) });
+        return json({ catalog, revision: result.content?.sha || null, commit: result.commit?.sha });
       }
       async function loadHistoryFile() {
         const file = await github(`/contents/history.json?ref=${encodeURIComponent(branch)}`, {}, true);
