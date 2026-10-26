@@ -60,14 +60,24 @@ test('model-specific parts can be reordered without changing required item order
  assert.equal(h.json('manager.dirty'),true);
 });
 
-test('VAN conditions remain respected and former replacement options behave like regular options',()=>{
- const h=app();h.run(`const modified=structuredClone(catalog);modified.models[0].items.find(p=>p.partId==='g20').qty=2;applyCatalog(modified,{replaceOrder:true});state.qty=3;state.options.passport={qty:6,on:true}`);
- assert.equal(h.json("optionLimit(optDefs.find(o=>o.id==='passport'))"),10000);
- assert.equal(h.json('calc().adjust'),0);
- assert.equal(h.json("calc().lines.find(p=>p.id==='g20').qty"),6);
+test('passport replacement subtracts the configured base reader across copies, print data and history',()=>{
+ const h=app();h.run(`const modified=structuredClone(catalog);modified.models[0].items.find(p=>p.partId==='g20').qty=2;applyCatalog(modified,{replaceOrder:true});state.qty=3;state.options.passport={qty:2,on:true}`);
+ assert.equal(h.json("optionLimit(optDefs.find(o=>o.id==='passport'))"),6);
+ assert.equal(h.json('calc().adjust'),-680000*2);
+ assert.equal(h.json("calc().lines.find(p=>p.id==='g20').qty"),4);
+ assert.equal(h.json("calc().lines.find(p=>p.id==='o52').qty"),2);
+ h.run('state.options.passport={qty:6,on:true}');
+ assert.equal(h.json('calc().adjust'),-680000*6);
+ assert.equal(h.json("calc().lines.some(p=>p.id==='g20')"),false);
+ assert.equal(h.json("calc().lines.find(p=>p.id==='o52').qty"),6);
+ assert.ok(h.json('requestText()').includes('여권인식기 교체 (다윈) 6개'));
+ assert.ok(!h.json('requestText()').includes('기본 여권인식기 (P/N: KI00192)'));
+ assert.ok(h.json('requestMarkup()').includes('교체 수량만큼 와이즈큐브를 제외했습니다.'));
+ h.run('const replacementSnapshot=historySnapshot();resetRequest();restoreOrder(replacementSnapshot)');
+ assert.equal(h.json("calc().lines.some(p=>p.id==='g20')"),false);
  assert.equal(h.json("calc().lines.find(p=>p.id==='o52').qty"),6);
  h.run("state.van='KIS'");assert.equal(h.json("baseParts().some(p=>p.id==='c35')"),false);assert.equal(h.json("baseParts().some(p=>p.id==='c36')"),true);
- h.run("state.type='equipment'");assert.deepEqual(h.json('baseParts()'),[]);assert.equal(h.json('calc().adjust'),0);
+ h.run("state.type='equipment'");assert.deepEqual(h.json('baseParts()'),[]);assert.equal(h.json("optionLimit(optDefs.find(o=>o.id==='passport'))"),10000);assert.equal(h.json('calc().adjust'),0);
 });
 
 test('old histories restore the original configuration and new histories preserve custom configurations',()=>{

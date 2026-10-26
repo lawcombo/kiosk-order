@@ -18,8 +18,8 @@ function syncCatalogBindings(){
  optDefs=data.options.map(o=>{const start=o.group!==group;group=o.group;return{...o,catalogGroup:o.group,group:start?o.group:''}});
  const allowed=new Set(optDefs.map(o=>o.id));for(const key of Object.keys(state.options))if(!allowed.has(key))delete state.options[key];
 }
-function replacementPartId(){return null}
-function replacementQuantity(){return 0}
+function replacementPartId(type=state.type,number=state.model){return type==='equipment'?null:modelInfo(type,number)?.replacementBaseId||null}
+function replacementQuantity(){const key=replacementPartId();return key?(baseParts().find(p=>p.id===key)?.qty||0)*state.qty:0}
 function applyCatalog(data,{replaceOrder=false}={}){
  catalog=validateCatalog(data);
  catalogLoadError='';

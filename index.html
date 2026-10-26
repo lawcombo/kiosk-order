@@ -108,8 +108,8 @@ function syncCatalogBindings(){
  optDefs=data.options.map(o=>{const start=o.group!==group;group=o.group;return{...o,catalogGroup:o.group,group:start?o.group:''}});
  const allowed=new Set(optDefs.map(o=>o.id));for(const key of Object.keys(state.options))if(!allowed.has(key))delete state.options[key];
 }
-function replacementPartId(){return null}
-function replacementQuantity(){return 0}
+function replacementPartId(type=state.type,number=state.model){return type==='equipment'?null:modelInfo(type,number)?.replacementBaseId||null}
+function replacementQuantity(){const key=replacementPartId();return key?(baseParts().find(p=>p.id===key)?.qty||0)*state.qty:0}
 function applyCatalog(data,{replaceOrder=false}={}){
  catalog=validateCatalog(data);
  catalogLoadError='';
@@ -369,13 +369,13 @@ optDefs.splice(optDefs.findIndex(o=>o.id==='sound'),0,
 optDefs.splice(optDefs.findIndex(o=>o.id==='cards'),0,{id:'pmsPc',name:'미니 PC - PMS 설정용(플렉티)',ids:['o58'],group:'PC',unit:'대'});
 syncCatalogBindings();
 function optionLabel(o){return o.name}
-function optionLimit(){return 10000}
-function optionParts(o,qty=1){return o.ids.map(id=>part(allParts.find(p=>p.id===id))).map(p=>({...p,qty,kind:'옵션'}))}
+function optionLimit(o){return o?.replacement&&!equipmentOnly()?Math.min(10000,replacementQuantity()):10000}
+function optionParts(o,qty=1){return o.ids.map(id=>part(allParts.find(p=>p.id===id))).map(p=>({...p,name:o.ids.length===1?optionLabel(o):p.name,qty,kind:'옵션'}))}
 function optState(o){const x=state.options[o.id]||{};const qty=Math.max(0,Math.min(optionLimit(o),parseInt(x.qty)||0));return{on:qty>0,qty}}
-function calc(){const base=baseParts(),baseTotal=cost(base)*state.qty;let lines=base.map(p=>({...p,qty:p.qty*state.qty})),options=[];for(const o of optDefs){const sel=optState(o);if(!sel.on)continue;const qty=sel.qty,ps=optionParts(o,qty);options.push({def:{...o,name:optionLabel(o)},qty,parts:ps,amount:cost(ps)});lines.push(...ps)}const missing=unknown(lines);return{base,baseTotal,lines:lines.filter(p=>p.qty>0),options,adjust:0,optionTotal:options.reduce((a,o)=>a+o.amount,0),total:baseTotal+options.reduce((a,o)=>a+o.amount,0),missing}}
+function calc(){const base=baseParts(),baseTotal=cost(base)*state.qty;let lines=base.map(p=>({...p,qty:p.qty*state.qty})),options=[],adjust=0;for(const o of optDefs){const sel=optState(o);if(!sel.on)continue;const qty=sel.qty,ps=optionParts(o,qty);options.push({def:{...o,name:optionLabel(o)},qty,parts:ps,amount:cost(ps)});lines.push(...ps);if(o.replacement&&!equipmentOnly()){const orig=lines.find(p=>p.id===replacementPartId());if(orig){const replaced=Math.min(qty,orig.qty);orig.qty-=replaced;if(typeof orig.price==='number')adjust-=orig.price*replaced}}}const missing=unknown(lines);return{base,baseTotal,lines:lines.filter(p=>p.qty>0),options,adjust,optionTotal:options.reduce((a,o)=>a+o.amount,0),total:baseTotal+options.reduce((a,o)=>a+o.amount,0)+adjust,missing}}
 function stepper(key,qty,min=1,max=10000,disabled=false){return `<div><div class="stepper"><button type="button" aria-label="${esc(key)} 수량 감소" data-click="step('${key}',-1)" ${disabled||qty<=min?'disabled':''}>−</button><input aria-label="${esc(key)} 수량" value="${qty}" type="number" min="${min}" max="${max}" data-change="setQty('${key}',this.value)" ${disabled?'disabled':''}><button type="button" aria-label="${esc(key)} 수량 증가" data-click="step('${key}',1)" ${disabled||qty>=max?'disabled':''}>＋</button></div></div>`}
 function step(key,delta){const o=optDefs.find(o=>o.id===key);setQty(key,(key==='main'?state.qty:optState(o).qty)+delta)}
-function setQty(key,n){const max=key==='main'?100:optionLimit(optDefs.find(o=>o.id===key));const qty=Math.max(key==='main'?1:0,Math.min(max,parseInt(n)||0));if(key==='main')state.qty=qty;else state.options[key]={...state.options[key],qty,on:qty>0};render()}
+function setQty(key,n){const max=key==='main'?100:optionLimit(optDefs.find(o=>o.id===key));const qty=Math.max(key==='main'?1:0,Math.min(max,parseInt(n)||0));if(key==='main'){state.qty=qty;for(const option of optDefs)if(option.replacement&&state.options[option.id]?.qty>optionLimit(option))state.options[option.id].qty=optionLimit(option)}else state.options[key]={...state.options[key],qty,on:qty>0};render()}
 function chooseType(type){state.type=type;state.options={};state.showCost=false;state.showFixed=false;render()}
 function chooseModel(n){state.showCost=state.model===n?!state.showCost:true;state.model=n;state.showFixed=false;render()}
 function toggleFixed(){state.showFixed=!state.showFixed;render()}
@@ -412,7 +412,7 @@ function render(){
  $('sumConfig').innerHTML=standalone?'<p class="muted" style="font-size:13px">기본·필수 품목 없음<br>선택한 추가 옵션만 포함됩니다.</p>':`<b>${esc(mod.title)}</b><p class="muted" style="font-size:13px">${esc(modelSummary())}<br>${vanLabel()}</p>`;
  $('sumPn').classList.toggle('hidden',standalone);
  $('sumPn').textContent=standalone?'':'신청 모델: '+code()+' · '+typeName();
- $('sumOptions').innerHTML=c.options.length?c.options.map(o=>`<div class="sumoption">＋ ${esc(o.def.name)} ${o.qty}${o.def.unit||'개'}</div>`).join(''):'<div class="sumoption">'+(standalone?'아직 선택한 장비가 없습니다.':'추가 옵션 없음')+'</div>';
+ $('sumOptions').innerHTML=c.options.length?c.options.map(o=>`<div class="sumoption">${o.def.replacement&&!standalone?'↔':'＋'} ${esc(o.def.name)} ${o.qty}${o.def.unit||'개'}${o.def.replacement&&!standalone?` · 와이즈큐브 ${o.qty}개 차감`:''}</div>`).join(''):'<div class="sumoption">'+(standalone?'아직 선택한 장비가 없습니다.':'추가 옵션 없음')+'</div>';
  $('sumCosts').innerHTML=`${standalone?'':`<div class="line"><span>기본 원가 × ${state.qty}대</span><b>${money(c.baseTotal)}</b></div>`}<div class="line"><span>${standalone?'선택 장비 원가':'추가 옵션·교체품'}</span><b>${money(c.optionTotal)}</b></div>${c.adjust?`<div class="line"><span>와이즈큐브 차감</span><b>${money(c.adjust)}</b></div>`:''}<div class="divider"></div><div class="line"><b>${c.missing.length?'확인된 원가 합계':'총 부품 원가'}</b></div>`;
  $('total').textContent=money(c.total);$('warnings').innerHTML=[...(catalogLoadError?[catalogLoadError]:[]),...warnings(c)].map(w=>`<div class="warn">${esc(w)}</div>`).join('')
 }
