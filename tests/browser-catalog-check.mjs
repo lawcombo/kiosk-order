@@ -61,6 +61,8 @@ try{
  await page.getByRole('tab',{name:/모델 구성/}).click();
  assert.ok((await page.locator('.manager-readonly').textContent()).includes('관리 시험 필수품'));
  assert.equal(await page.locator('.manager-readonly input').count(),0);
+ const modelFieldTops=await page.locator('.manager-model-fields input').evaluateAll(elements=>elements.map(el=>Math.round(el.getBoundingClientRect().top)));
+ assert.equal(new Set(modelFieldTops).size,1,'model name and description fields stay on one desktop row');
  await page.locator('#modelPartPicker').selectOption(optionId);await page.getByRole('button',{name:'+ 모델에 추가',exact:true}).click();
  await page.locator(`[data-model-part="${optionPartId}"]`).getByLabel(/수량/).fill('3');
  for(const selector of ['.manager-header','.manager-footer']){const box=await page.locator(selector).boundingBox();assert.ok(box.y>=0&&box.y+box.height<=1050,'editor chrome remains visible: '+selector)}
@@ -73,6 +75,7 @@ try{
  assert.equal(stored.parts.find(p=>p.id===optionPartId).pn,'-');assert.equal(stored.parts.find(p=>p.id===optionPartId).price,null);assert.equal(stored.models[0].items.at(-1).qty,3);
  assert.ok(stored.models.filter(m=>m.type==='general').every(m=>m.items.some(row=>row.partId===requiredId&&row.qty===2)));
  await page.locator('#closeSettingsButton').click();
+ assert.equal(await page.locator('body>header').evaluate(el=>getComputedStyle(el).position),'sticky');await page.evaluate(()=>scrollTo(0,document.body.scrollHeight));await page.waitForTimeout(50);assert.ok((await page.locator('body>header').boundingBox()).y<=1,'main header stays visible while scrolling');await page.evaluate(()=>scrollTo(0,0));
  assert.equal(await page.evaluate(()=>calc().total),initial-1250000+100000);
  assert.ok((await page.locator('#options').textContent()).includes('관리 시험 장치 <b>표시</b>'));
  assert.equal(await page.locator('#options b b').count(),0);
