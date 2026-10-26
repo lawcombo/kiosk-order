@@ -37,6 +37,8 @@ try{
  assert.equal(await page.locator('body>header .brand').textContent(),'무인숙박 설치 품목 관리 및 출하 신청');
  assert.equal(await page.getByRole('button',{name:'신청서 불러오기',exact:true}).count(),0);
  assert.equal(await page.locator('#saveHistoryButton').textContent(),'이력 저장');
+ assert.equal(await page.getByText('이 모델의 기본 부품·P/N 보기',{exact:true}).count(),0);
+ assert.equal(await page.locator('#baseTable').count(),0);
  const initial=await page.evaluate(()=>calc().total);
  for(const type of ['general','slim'])for(const model of [1,2,3,4]){await page.evaluate(([kind,value])=>{state.type=kind;state.model=value;render()},[type,model]);const messages=await page.locator('#warnings').textContent();for(const obsolete of ['슬림형 브라켓은 잠정단가 적용','카드발행기: 도어락 연동·장착 부속 확인','AI BOX의 녹화·저장·조회 구성 확인'])assert.ok(!messages.includes(obsolete))}await page.evaluate(()=>{state.type='general';state.model=1;render()});
  for(const type of ['general','slim']){await page.evaluate(kind=>{state.type=kind;state.model=1;state.showCost=true;render()},type);const breakdown=page.locator('#costBreakdown'),label=type==='general'?'일반형':'슬림형',text=await breakdown.textContent();assert.ok(text.includes(label+' 고정 부품'));assert.ok(text.includes(label+' 고정 부품 소계'));assert.ok(text.includes('모델별 포함 장비 소계'));assert.deepEqual(await breakdown.locator('.breakdown-section').allTextContents(),[label+' 고정 부품','모델별 포함 장비']);assert.deepEqual(await breakdown.locator('.breakdown-section td').evaluateAll(cells=>cells.map(cell=>getComputedStyle(cell).textAlign)),['left','left']);assert.ok(!text.includes('카드토출기는 함체, NVR은 저장용 HDD를 함께 포함합니다.'));assert.equal(await breakdown.getByRole('button',{name:/고정/}).count(),0)}await page.evaluate(()=>{state.type='general';state.model=1;state.showCost=false;render()});
