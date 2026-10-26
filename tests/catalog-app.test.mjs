@@ -52,6 +52,14 @@ test('required items sync by kiosk type and model additions come from registered
  assert.doesNotThrow(()=>validateCatalog(h.json('manager.draft')));
 });
 
+test('model-specific parts can be reordered without changing required item order',()=>{
+ const h=app();
+ h.run(`manager.draft=structuredClone(catalog);manager.loaded=true;manager.model='G1';const reorderModel=manager.draft.models.find(m=>m.id==='G1'),reorderRequired=requiredPartIds(manager.draft,reorderModel.type),reorderFixedBefore=reorderModel.items.filter(row=>reorderRequired.has(row.partId)).map(row=>row.partId),reorderSpecificBefore=reorderModel.items.filter(row=>!reorderRequired.has(row.partId)).map(row=>row.partId),reorderIndex=reorderModel.items.findIndex(row=>row.partId===reorderSpecificBefore[1]);moveModelItem(reorderIndex,-1);`);
+ assert.deepEqual(h.json('reorderModel.items.filter(row=>reorderRequired.has(row.partId)).map(row=>row.partId)'),h.json('reorderFixedBefore'));
+ assert.deepEqual(h.json('reorderModel.items.filter(row=>!reorderRequired.has(row.partId)).map(row=>row.partId).slice(0,2)'),h.json('[reorderSpecificBefore[1],reorderSpecificBefore[0]]'));
+ assert.equal(h.json('manager.dirty'),true);
+});
+
 test('VAN conditions remain respected and former replacement options behave like regular options',()=>{
  const h=app();h.run(`const modified=structuredClone(catalog);modified.models[0].items.find(p=>p.partId==='g20').qty=2;applyCatalog(modified,{replaceOrder:true});state.qty=3;state.options.passport={qty:6,on:true}`);
  assert.equal(h.json("optionLimit(optDefs.find(o=>o.id==='passport'))"),10000);

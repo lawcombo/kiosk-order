@@ -67,6 +67,9 @@ try{
  assert.equal(new Set(modelFieldTops).size,1,'model name and description fields stay on one desktop row');
  await page.locator('#modelPartPicker').selectOption(optionId);await page.getByRole('button',{name:'+ 모델에 추가',exact:true}).click();
  await page.locator(`[data-model-part="${optionPartId}"]`).getByLabel(/수량/).fill('3');
+ const previousSpecific=await page.evaluate(id=>{const m=manager.draft.models.find(model=>model.id==='G1'),required=requiredPartIds(manager.draft,m.type),specific=m.items.filter(row=>!required.has(row.partId)),position=specific.findIndex(row=>row.partId===id);return position>0?{id:specific[position-1].partId,van:specific[position-1].van}:null},optionPartId);assert.ok(previousSpecific);
+ await page.locator(`[data-model-part="${optionPartId}"]`).getByRole('button',{name:/위로 이동/}).click();
+ assert.equal(await page.evaluate(([id,previous])=>{const m=manager.draft.models.find(model=>model.id==='G1');return m.items.findIndex(row=>row.partId===id)<m.items.findIndex(row=>row.partId===previous)},[optionPartId,previousSpecific.id]),true);
  for(const selector of ['.manager-header','.manager-footer']){const box=await page.locator(selector).boundingBox();assert.ok(box.y>=0&&box.y+box.height<=1050,'editor chrome remains visible: '+selector)}
  await screenshot(page,'catalog-model-editor');
  assert.equal(await page.evaluate(()=>calc().total),initial);
@@ -74,10 +77,11 @@ try{
  assert.equal(await page.evaluate(()=>manager.dirty),true);assert.equal(await page.evaluate(()=>calc().total),initial);
  failSave=false;await saveManager(page);
  const stored=JSON.parse(files.get('parts.json')),newOption=stored.options.find(o=>o.id===optionId);
- assert.equal(stored.parts.find(p=>p.id===optionPartId).pn,'-');assert.equal(stored.parts.find(p=>p.id===optionPartId).price,null);assert.equal(stored.models[0].items.at(-1).qty,3);
+ assert.equal(stored.parts.find(p=>p.id===optionPartId).pn,'-');assert.equal(stored.parts.find(p=>p.id===optionPartId).price,null);assert.equal(stored.models[0].items.find(row=>row.partId===optionPartId).qty,3);assert.ok(stored.models[0].items.findIndex(row=>row.partId===optionPartId)<stored.models[0].items.findIndex(row=>row.partId===previousSpecific.id));
  assert.ok(stored.models.filter(m=>m.type==='general').every(m=>m.items.some(row=>row.partId===requiredId&&row.qty===2)));
  await page.getByRole('button',{name:'G2 일반형',exact:true}).click();assert.equal(await page.evaluate(()=>manager.model),'G2');
  await page.locator('#closeSettingsButton').click();
+ assert.equal(await page.evaluate(([id,previous,van])=>{const rows=baseParts('general',1,van==='ALL'?'NICE':van);return rows.findIndex(row=>row.id===id)<rows.findIndex(row=>row.id===previous)},[optionPartId,previousSpecific.id,previousSpecific.van]),true,'saved model-part order reaches the main configuration');
  assert.equal(await page.locator('body>header').evaluate(el=>getComputedStyle(el).position),'sticky');await page.evaluate(()=>scrollTo(0,document.body.scrollHeight));await page.waitForTimeout(50);assert.ok((await page.locator('body>header').boundingBox()).y<=1,'main header stays visible while scrolling');await page.evaluate(()=>scrollTo(0,0));
  assert.equal(await page.evaluate(()=>calc().total),initial-1250000+100000);
  assert.ok((await page.locator('#options').textContent()).includes('관리 시험 장치 <b>표시</b>'));
