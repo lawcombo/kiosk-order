@@ -1,0 +1,11 @@
+{
+  "name": "kiosk-order",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/history-api.test.mjs",
+    "dev": "node scripts/dev-server.mjs",
+    "deploy:history": "npx wrangler@4 deploy --config history-api/wrangler.toml"
+  },
+  "engines": { "node": ">=22" }
+}

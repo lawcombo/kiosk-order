@@ -1,0 +1,13 @@
+name = "kiosk-order-history"
+main = "worker.mjs"
+compatibility_date = "2026-10-23"
+workers_dev = true
+preview_urls = false
+
+[vars]
+GITHUB_OWNER = "lawcombo"
+GITHUB_REPO = "kiosk-order"
+GITHUB_BRANCH = "main"
+ALLOWED_ORIGINS = "https://lawcombo.github.io,http://127.0.0.1:4173,http://localhost:4173"
+
+# GITHUB_TOKEN is a secret. Set it in Cloudflare, never here.
