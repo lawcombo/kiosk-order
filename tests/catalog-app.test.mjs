@@ -89,6 +89,13 @@ test('passport replacement subtracts the configured base reader across copies, p
  h.run("state.type='equipment'");assert.deepEqual(h.json('baseParts()'),[]);assert.equal(h.json("optionLimit(optDefs.find(o=>o.id==='passport'))"),10000);assert.equal(h.json('calc().adjust'),0);
 });
 
+test('general card issuer and AI BOX models omit slim-only hardware warnings',()=>{
+ const h=app();
+ for(const model of [2,3,4]){h.run(`state.type='general';state.model=${model}`);const messages=h.json('warnings(calc())');assert.ok(!messages.includes('카드발행기: 도어락 연동·장착 부속 확인'));assert.ok(!messages.includes('AI BOX의 녹화·저장·조회 구성 확인'))}
+ h.run("state.type='slim';state.model=2");assert.ok(h.json('warnings(calc())').includes('카드발행기: 도어락 연동·장착 부속 확인'));
+ h.run("state.type='slim';state.model=3");assert.ok(h.json('warnings(calc())').includes('AI BOX의 녹화·저장·조회 구성 확인'));
+});
+
 test('old histories restore the original configuration and new histories preserve custom configurations',()=>{
  const h=app();h.run(`const originalState={...fresh(),type:'general',model:1,info:{site:'이전 이력',date:'2026-09-01'},overrides:{g8:{price:99}}};const modified=structuredClone(catalog);modified.models[0].items=modified.models[0].items.filter(row=>row.partId!=='g8');applyCatalog(modified,{replaceOrder:true});restoreOrder(originalState)`);
  assert.equal(h.json("calc().base.find(p=>p.id==='g8').price"),99);
