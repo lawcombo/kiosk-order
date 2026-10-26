@@ -105,7 +105,7 @@ function modelSummary(type=state.type,number=state.model){
 }
 function syncCatalogBindings(){
  const data=currentCatalog();allParts=data.parts;let group='';
- optDefs=data.options.map(o=>{const start=o.group!==group;group=o.group;return{...o,catalogGroup:o.group,group:start?o.group:''}});
+ optDefs=optionsByGroup(data.options).map(o=>{const start=o.group!==group;group=o.group;return{...o,catalogGroup:o.group,group:start?o.group:''}});
  const allowed=new Set(optDefs.map(o=>o.id));for(const key of Object.keys(state.options))if(!allowed.has(key))delete state.options[key];
 }
 function replacementPartId(type=state.type,number=state.model){return type==='equipment'?null:modelInfo(type,number)?.replacementBaseId||null}
@@ -128,6 +128,7 @@ function requiredRows(data,type){
  return models[0].items.filter(row=>ids.has(row.partId)).map(row=>({part:data.parts.find(p=>p.id===row.partId),qty:row.qty})).filter(row=>row.part);
 }
 function requiredCount(data){return new Set(['general','slim'].flatMap(type=>[...requiredPartIds(data,type)])).size}
+function optionsByGroup(options,groups=[...new Set(options.map(o=>o.group).filter(Boolean))]){const order=[...new Set(groups.filter(Boolean))],known=new Set(order);return[...order.flatMap(group=>options.filter(o=>o.group===group)),...options.filter(o=>!known.has(o.group))]}
 function optionGroups(data=manager.draft){return [...new Set([...manager.groups,...(data?.options||[]).map(o=>o.group).filter(Boolean)])]}
 function syncManagerGroups(data){manager.groups=[...new Set(data.options.map(o=>o.group).filter(Boolean))];if(!manager.groups.length)manager.groups=['추가 장비'];if(!manager.groups.includes(manager.optionGroup))manager.optionGroup=manager.groups[0]}
 function optionPart(option,data=manager.draft){return data.parts.find(p=>p.id===option.ids[0])}
@@ -230,6 +231,7 @@ function managerInput(el){
   else if(field==='pn'&&part)part.pn=el.value;
   else if(field==='price'&&part)part.price=el.value===''?null:Number(el.value);
   else option[field]=field==='defaultQty'?Number(el.value):el.value;
+  if(field==='group'&&previous!==option.group)manager.draft.options=optionsByGroup(manager.draft.options,optionGroups(manager.draft));
   if(previous!==(field==='pn'||field==='price'?part?.[field]:option[field]))managerDirty();
   if(field==='group'){manager.optionGroup=option.group;renderManager()}
   return;

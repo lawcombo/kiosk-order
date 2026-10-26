@@ -60,6 +60,15 @@ test('model-specific parts can be reordered without changing required item order
  assert.equal(h.json('manager.dirty'),true);
 });
 
+test('moving an option joins its existing group without duplicating the main heading',()=>{
+ const h=app();
+ h.run(`manager.draft=structuredClone(catalog);manager.loaded=true;syncManagerGroups(manager.draft);const movedOption=manager.draft.options.find(o=>o.id==='motion');manager.optionGroup=movedOption.group;managerInput({dataset:{admin:'option',id:movedOption.id,field:'group'},value:'교체·기타'});const targetPositions=manager.draft.options.map((o,index)=>o.group==='교체·기타'?index:-1).filter(index=>index>=0);applyCatalog(manager.draft,{replaceOrder:true});`);
+ assert.equal(h.json("manager.draft.options.find(o=>o.id==='motion').group"),'교체·기타');
+ assert.equal(h.json('Math.max(...targetPositions)-Math.min(...targetPositions)+1'),h.json('targetPositions.length'));
+ assert.equal(h.json("optDefs.filter(o=>o.group==='교체·기타').length"),1);
+ assert.deepEqual(h.json('optDefs.filter(o=>o.group).map(o=>o.group)'),h.json('[...new Set(optDefs.filter(o=>o.group).map(o=>o.group))]'));
+});
+
 test('passport replacement subtracts the configured base reader across copies, print data and history',()=>{
  const h=app();h.run(`const modified=structuredClone(catalog);modified.models[0].items.find(p=>p.partId==='g20').qty=2;applyCatalog(modified,{replaceOrder:true});state.qty=3;state.options.passport={qty:2,on:true}`);
  assert.equal(h.json("optionLimit(optDefs.find(o=>o.id==='passport'))"),6);
