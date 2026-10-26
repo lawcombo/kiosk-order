@@ -39,10 +39,25 @@ test('removing a part removes all references and does not break any model or opt
  assert.ok(!h.json('catalogMarkup()').includes('KI00672'));
 });
 
-test('VAN conditions and configured replacement quantities are respected',()=>{
+test('required items sync by kiosk type and model additions come from registered options',()=>{
+ const h=app();
+ h.run(`manager.draft=structuredClone(catalog);manager.loaded=true;manager.requiredType='general';const beforeRequired=requiredCount(manager.draft);addRequiredPart();const requiredId=manager.draft.parts.at(-1).id;managerInput({dataset:{admin:'required',id:requiredId,field:'name'},value:'공통 시험 필수품'});managerInput({dataset:{admin:'required',id:requiredId,field:'pn'},value:'REQ-1'});managerInput({dataset:{admin:'required',id:requiredId,field:'price'},value:'123'});managerInput({dataset:{admin:'required',id:requiredId,field:'qty'},value:'2'});`);
+ assert.equal(h.json('requiredCount(manager.draft)'),h.json('beforeRequired')+1);
+ assert.equal(h.json("manager.draft.models.filter(m=>m.type==='general').every(m=>m.items.some(row=>row.partId===requiredId&&row.section==='fixed'&&row.qty===2))"),true);
+ assert.equal(h.json("manager.draft.models.filter(m=>m.type==='slim').some(m=>m.items.some(row=>row.partId===requiredId))"),false);
+ h.run(`manager.groups.push('시험 그룹');manager.optionGroup='시험 그룹';addCatalogOption();const addedOption=manager.draft.options.at(-1),optionId=addedOption.id,optionPartId=addedOption.ids[0];managerInput({dataset:{admin:'option',id:optionId,field:'name'},value:'모델 시험 옵션'});managerInput({dataset:{admin:'option',id:optionId,field:'pn'},value:'OPT-1'});managerInput({dataset:{admin:'option',id:optionId,field:'price'},value:'456'});manager.model='G1';$('modelPartPicker').value=optionId;addModelItem();`);
+ assert.equal(h.json("manager.draft.parts.find(p=>p.id===optionPartId).category"),'common');
+ assert.equal(h.json("manager.draft.models.find(m=>m.id==='G1').items.some(row=>row.partId===optionPartId&&row.section==='model')"),true);
+ assert.equal(h.json("manager.draft.models.find(m=>m.id==='G2').items.some(row=>row.partId===optionPartId)"),false);
+ assert.doesNotThrow(()=>validateCatalog(h.json('manager.draft')));
+});
+
+test('VAN conditions remain respected and former replacement options behave like regular options',()=>{
  const h=app();h.run(`const modified=structuredClone(catalog);modified.models[0].items.find(p=>p.partId==='g20').qty=2;applyCatalog(modified,{replaceOrder:true});state.qty=3;state.options.passport={qty:6,on:true}`);
- assert.equal(h.json("optionLimit(optDefs.find(o=>o.id==='passport'))"),6);
- assert.equal(h.json('calc().adjust'),-680000*6);
+ assert.equal(h.json("optionLimit(optDefs.find(o=>o.id==='passport'))"),10000);
+ assert.equal(h.json('calc().adjust'),0);
+ assert.equal(h.json("calc().lines.find(p=>p.id==='g20').qty"),6);
+ assert.equal(h.json("calc().lines.find(p=>p.id==='o52').qty"),6);
  h.run("state.van='KIS'");assert.equal(h.json("baseParts().some(p=>p.id==='c35')"),false);assert.equal(h.json("baseParts().some(p=>p.id==='c36')"),true);
  h.run("state.type='equipment'");assert.deepEqual(h.json('baseParts()'),[]);assert.equal(h.json('calc().adjust'),0);
 });

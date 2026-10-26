@@ -3,7 +3,8 @@ import {validateCatalog} from '../history-api/worker.mjs';
 const path=new URL('../index.html',import.meta.url),html=fs.readFileSync(path,'utf8').replace(/\r\n/g,'\n');
 const match=html.match(/<script id="catalogCode">\n([\s\S]*?)\n<\/script>/);
 if(!match)throw new Error('catalogCode block is missing');
-const old=match[1].split('\n'),next=(validateCatalog.toString()+'\n'+fs.readFileSync(new URL('./catalog-ui.js',import.meta.url),'utf8').replace(/\r\n/g,'\n')).split('\n');
+const validator=validateCatalog.toString().replace(/\r\n/g,'\n');
+const old=match[1].split('\n'),next=(validator+'\n'+fs.readFileSync(new URL('./catalog-ui.js',import.meta.url),'utf8').replace(/\r\n/g,'\n')).split('\n');
 if(old.join('\n')===next.join('\n')){console.log('Embedded catalog editor is current.');process.exit(0)}
 if(!process.argv.includes('--patch')){console.error('The embedded catalog editor needs updating. Use --patch to print an apply_patch patch.');process.exit(1)}
 const dp=Array.from({length:old.length+1},()=>new Uint32Array(next.length+1));
