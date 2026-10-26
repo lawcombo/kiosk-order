@@ -144,7 +144,7 @@ function renderManagerFooter(){
 async function openSettings(){
  if($('settings').open)return;
  catalogLoadSequence++;
- manager.draft=null;manager.dirty=false;manager.loaded=false;manager.tab='models';manager.groups=[];$('settings').showModal();renderManager();await reloadCatalog(false);
+ manager.draft=null;manager.dirty=false;manager.loaded=false;manager.tab='models';manager.model='G1';manager.groups=[];$('settings').showModal();renderManager();await reloadCatalog(false);
 }
 function closeSettings(){
  if(manager.saving)return;
