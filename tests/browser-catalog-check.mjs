@@ -34,6 +34,7 @@ async function saveManager(page){await page.locator('#saveCatalogButton').click(
 async function screenshot(page,name){if(process.env.CHECK_SCREENSHOTS_DIR)await page.screenshot({path:path.join(process.env.CHECK_SCREENSHOTS_DIR,name+'.png')})}
 try{
  const {page,context}=await makePage();
+ assert.equal(await page.locator('body>header .brand').textContent(),'무인숙박 설치 품목 관리 및 출하 신청');
  assert.equal(await page.getByRole('button',{name:'신청서 불러오기',exact:true}).count(),0);
  assert.equal(await page.locator('#saveHistoryButton').textContent(),'이력 저장');
  const initial=await page.evaluate(()=>calc().total);
