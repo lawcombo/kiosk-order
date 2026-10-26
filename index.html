@@ -652,6 +652,8 @@ async function importRequest(el){const file=el.files[0];if(!file)return;try{cons
 function resetRequest(){if(!confirm('현재 작성 내용을 지우고 새 신청서를 만드시겠습니까?'))return;state=fresh();syncCatalogBindings();renderFields(fields,'info','infoForm');render()}
 
 document.addEventListener('click',event=>{
+ const pickerInput=event.target.closest('input[data-group="info"][type="date"],input[data-group="info"][type="time"]');
+ if(pickerInput&&typeof pickerInput.showPicker==='function')try{pickerInput.showPicker()}catch{}
  const el=event.target.closest('[data-click]');if(!el)return;
  const cmd=el.getAttribute('data-click');
  if(cmd==="document.getElementById('importFile').click()"){$('importFile').click();return;}
