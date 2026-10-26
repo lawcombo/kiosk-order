@@ -89,11 +89,10 @@ test('passport replacement subtracts the configured base reader across copies, p
  h.run("state.type='equipment'");assert.deepEqual(h.json('baseParts()'),[]);assert.equal(h.json("optionLimit(optDefs.find(o=>o.id==='passport'))"),10000);assert.equal(h.json('calc().adjust'),0);
 });
 
-test('general card issuer and AI BOX models omit slim-only hardware warnings',()=>{
+test('all kiosk models omit obsolete bracket, card issuer and AI BOX warnings',()=>{
  const h=app();
- for(const model of [2,3,4]){h.run(`state.type='general';state.model=${model}`);const messages=h.json('warnings(calc())');assert.ok(!messages.includes('카드발행기: 도어락 연동·장착 부속 확인'));assert.ok(!messages.includes('AI BOX의 녹화·저장·조회 구성 확인'))}
- h.run("state.type='slim';state.model=2");assert.ok(h.json('warnings(calc())').includes('카드발행기: 도어락 연동·장착 부속 확인'));
- h.run("state.type='slim';state.model=3");assert.ok(h.json('warnings(calc())').includes('AI BOX의 녹화·저장·조회 구성 확인'));
+ const obsolete=['슬림형 브라켓은 잠정단가 적용','카드발행기: 도어락 연동·장착 부속 확인','AI BOX의 녹화·저장·조회 구성 확인'];
+ for(const type of ['general','slim'])for(const model of [1,2,3,4]){h.run(`state.type='${type}';state.model=${model}`);const messages=h.json('warnings(calc())');for(const message of obsolete)assert.ok(!messages.includes(message),type+model+' still shows '+message)}
 });
 
 test('old histories restore the original configuration and new histories preserve custom configurations',()=>{

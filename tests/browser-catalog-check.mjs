@@ -37,7 +37,7 @@ try{
  assert.equal(await page.getByRole('button',{name:'신청서 불러오기',exact:true}).count(),0);
  assert.equal(await page.locator('#saveHistoryButton').textContent(),'이력 저장');
  const initial=await page.evaluate(()=>calc().total);
- for(const model of [2,3,4]){await page.evaluate(value=>{state.type='general';state.model=value;render()},model);const messages=await page.locator('#warnings').textContent();assert.ok(!messages.includes('카드발행기: 도어락 연동·장착 부속 확인'));assert.ok(!messages.includes('AI BOX의 녹화·저장·조회 구성 확인'))}await page.evaluate(()=>{state.model=1;render()});
+ for(const type of ['general','slim'])for(const model of [1,2,3,4]){await page.evaluate(([kind,value])=>{state.type=kind;state.model=value;render()},[type,model]);const messages=await page.locator('#warnings').textContent();for(const obsolete of ['슬림형 브라켓은 잠정단가 적용','카드발행기: 도어락 연동·장착 부속 확인','AI BOX의 녹화·저장·조회 구성 확인'])assert.ok(!messages.includes(obsolete))}await page.evaluate(()=>{state.type='general';state.model=1;render()});
  await openManager(page);
  assert.equal(await page.getByRole('tab',{name:/모델 구성/}).getAttribute('aria-selected'),'true');
  await page.getByRole('tab',{name:/필수항목/}).click();
