@@ -120,6 +120,8 @@ test('Excel worksheets mirror the current catalog in the supplied three-sheet la
  assert.ok(h.json('excelSummary').includes('SUMIFS'));
  assert.ok(h.json('excelSummary').includes('NICE VAN 최종 원가'));
  assert.ok(!h.json('excelSummary').includes('잠정단가'));
+ assert.ok(h.json('catalogExcelWorkbook()').indexOf('<sheets>')<h.json('catalogExcelWorkbook()').indexOf('<calcPr'));
+ assert.ok([...h.json('catalogExcelStyles()').matchAll(/<font>(.*?)<\/font>/g)].every(match=>match[1].indexOf('<color')<match[1].indexOf('<name')));
 });
 
 test('field emphasis colors only selected values and survives history snapshots',()=>{
