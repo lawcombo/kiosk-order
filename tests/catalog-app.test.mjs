@@ -110,6 +110,18 @@ test('catalog cover splits general and slim summaries without the old guide',()=
  assert.ok(!cover.includes('<th>제품 유형</th>'));
 });
 
+test('Excel worksheets mirror the current catalog in the supplied three-sheet layout',()=>{
+ const h=app();
+ h.run(`const changed=structuredClone(catalog);changed.parts.push({id:'excel_part',category:'common',name:'엑셀 반영 시험품',pn:'EXCEL-PN',spec:'양식 반영',price:3210});changed.models[0].items.push({partId:'excel_part',qty:2,section:'model',van:'ALL'});applyCatalog(changed,{replaceOrder:true});const excelRecords=catalogRecords(),excelGeneral=catalogExcelDetail(excelRecords.filter(record=>record.type==='general')),excelSlim=catalogExcelDetail(excelRecords.filter(record=>record.type==='slim')),excelSummary=catalogExcelSummary(excelRecords,{general:excelGeneral.lastRow,slim:excelSlim.lastRow});`);
+ assert.ok(h.json('excelGeneral.xml').includes('엑셀 반영 시험품 / 양식 반영'));
+ assert.ok(h.json('excelGeneral.xml').includes('EXCEL-PN'));
+ assert.ok(h.json('excelSlim.xml').includes('S4'));
+ assert.ok(h.json('excelSummary').includes('키오스크 제품 유형 · 모델별 원가'));
+ assert.ok(h.json('excelSummary').includes('SUMIFS'));
+ assert.ok(h.json('excelSummary').includes('NICE VAN 최종 원가'));
+ assert.ok(!h.json('excelSummary').includes('잠정단가'));
+});
+
 test('field emphasis colors only selected values and survives history snapshots',()=>{
  const h=app();h.run(`state.info={...state.info,applicant:'홍길동 / 운영팀',site:'강조 숙박',notes:'긴급 설치'};state.infoEmphasis={applicant:true,notes:true}`);
  for(const markup of [h.json('requestMarkup()'),h.json('emailMarkup()')]){
