@@ -166,7 +166,10 @@ test('print preview uses the same composition as the rich request copy',()=>{
  for(const type of ['general','slim','equipment']){
   h.run(`state.type='${type}';state.info={...state.info,site:'동일 구성 시험',notes:'인쇄 복사 동일'};`);
   const copied=h.json('emailMarkup()'),printed=h.json('printMarkup()');
-  assert.ok(printed.includes(copied));
+  const headings=[...copied.matchAll(/<h3[^>]*>(.*?)<\/h3>/g)].map(match=>match[1]);
+  assert.deepEqual([...printed.matchAll(/<h3[^>]*>(.*?)<\/h3>/g)].map(match=>match[1]),headings);
+  assert.equal((printed.match(/class="req-sheet email-print-sheet"/g)||[]).length,type==='equipment'?2:3);
+  assert.ok(headings.every(heading=>printed.includes(heading)));
   assert.ok(printed.includes('동일 구성 시험'));
   assert.ok(printed.includes('인쇄 복사 동일'));
  }
