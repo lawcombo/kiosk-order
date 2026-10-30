@@ -161,6 +161,17 @@ test('field emphasis colors only selected values and survives history snapshots'
  assert.deepEqual(h.json('state.infoEmphasis'),{applicant:true,notes:true});
 });
 
+test('print preview uses the same composition as the rich request copy',()=>{
+ const h=app();
+ for(const type of ['general','slim','equipment']){
+  h.run(`state.type='${type}';state.info={...state.info,site:'동일 구성 시험',notes:'인쇄 복사 동일'};`);
+  const copied=h.json('emailMarkup()'),printed=h.json('printMarkup()');
+  assert.ok(printed.includes(copied));
+  assert.ok(printed.includes('동일 구성 시험'));
+  assert.ok(printed.includes('인쇄 복사 동일'));
+ }
+});
+
 test('old histories restore the original configuration and new histories preserve custom configurations',()=>{
  const h=app();h.run(`const originalState={...fresh(),type:'general',model:1,info:{site:'이전 이력',date:'2026-09-01'},overrides:{g8:{price:99}}};const modified=structuredClone(catalog);modified.models[0].items=modified.models[0].items.filter(row=>row.partId!=='g8');applyCatalog(modified,{replaceOrder:true});restoreOrder(originalState)`);
  assert.equal(h.json("calc().base.find(p=>p.id==='g8').price"),99);
