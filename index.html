@@ -431,14 +431,15 @@ function setEmphasis(el){if(el.checked)state.infoEmphasis[el.dataset.emphasis]=t
 function syncFormFields(){document.querySelectorAll('[data-group][data-key]').forEach(el=>{state[el.dataset.group][el.dataset.key]=el.value});document.querySelectorAll('[data-emphasis]').forEach(el=>{if(el.checked)state.infoEmphasis[el.dataset.emphasis]=true;else delete state.infoEmphasis[el.dataset.emphasis]})}
 function toast(t){$('toast').textContent=t;$('toast').classList.remove('hidden');setTimeout(()=>$('toast').classList.add('hidden'),3000)}
 function requestGroups(c){return{fixed:c.lines.filter(p=>p.kind!=='옵션'&&p.section==='fixed'),model:c.lines.filter(p=>p.kind!=='옵션'&&p.section!=='fixed'),options:c.lines.filter(p=>p.kind==='옵션')}}
+function infoTextValue(key,value,fallback='미기재'){const text=value||fallback;return state.infoEmphasis[key]?'★ '+text:text}
 function equipmentRequestText(){
  const c=calc(),i=state.info;
  return ['[출하 요청] '+(i.site||'매장명 미기재')+' / 장비 개별 구성 (NO KIOSK)',
  '', '안녕하세요. 아래 장비의 출하 및 설치를 요청드립니다.', '',
- '[1. 신청·현장 정보]', '신청자: '+(i.applicant||'미기재'), '신청일: '+(i.date||'미기재'), '숙박업소명: '+(i.site||'미기재'), '사업자번호: '+(i.business||'미기재'), '현장 담당자 / 연락처: '+(i.contact||'미기재'), '설치 희망일: '+(i.install||'미정'), '설치 희망 시간: '+(i.installTime||'미정'), '설치 주소: '+(i.address||'미기재'), '운송 / 설치: '+(i.delivery||'미정'), 'S/W·관제: '+(i.sw||'미정'), 'PMS / 계정정보: '+(i.pms||'미정'), '',
+ '[1. 신청·현장 정보]', '신청자: '+infoTextValue('applicant',i.applicant), '신청일: '+infoTextValue('date',i.date), '숙박업소명: '+infoTextValue('site',i.site), '사업자번호: '+infoTextValue('business',i.business), '현장 담당자 / 연락처: '+infoTextValue('contact',i.contact), '설치 희망일: '+infoTextValue('install',i.install,'미정'), '설치 희망 시간: '+infoTextValue('installTime',i.installTime,'미정'), '설치 주소: '+infoTextValue('address',i.address), '운송 / 설치: '+infoTextValue('delivery',i.delivery,'미정'), 'S/W·관제: '+infoTextValue('sw',i.sw,'미정'), 'PMS / 계정정보: '+infoTextValue('pms',i.pms,'미정'), '',
  '[2. 선택 장비]', ...(c.lines.length?c.lines.map(p=>'- '+p.name+' (P/N: '+(p.pn||'미등록')+') / 수량 '+p.qty+' / 원가 '+requestUnit(typeof p.price==='number'?p.price*p.qty:null)):['선택한 장비 없음']), '',
  '[3. 부품 원가]', (c.missing.length?'확인된 원가 합계: ':'총 부품 원가: ')+requestMoney(c.total), '',
- '[4. 설치·출하 요청사항]',i.notes||'별도 요청 없음'].join('\n');
+ '[4. 설치·출하 요청사항]',infoTextValue('notes',i.notes,'별도 요청 없음')].join('\n');
 }
 function equipmentRequestMarkup(){
  const c=calc(),i=state.info;
@@ -464,19 +465,19 @@ function requestText(){
  const line=p=>'- '+(p.unneeded?'[불필요 · 출하 제외] ':'')+p.name+' (P/N: '+(p.pn||'미등록')+') / 수량 '+p.qty+' / 원가 '+(requestUnit(typeof p.price==='number'?p.price*p.qty:null));
  return ['[출하 요청] '+(info.site||'매장명 미기재')+' / '+typeName()+' '+code()+' / '+state.qty+'대',
  '', '안녕하세요. 아래 구성으로 출하 및 설치를 요청드립니다.', '',
- '[1. 신청·현장 정보]', '신청자: '+(info.applicant||'미기재'), '신청일: '+(info.date||'미기재'), '숙박업소명: '+(info.site||'미기재'), '사업자번호: '+(info.business||'미기재'), '현장 담당자 / 연락처: '+(info.contact||'미기재'), '설치 희망일: '+(info.install||'미정'), '설치 희망 시간: '+(info.installTime||'미정'), '설치 주소: '+(info.address||'미기재'), '운송 / 설치: '+(info.delivery||'미정'), '',
- '[2. 신청 모델]', '모델: '+typeName()+' '+code()+' · '+mod.title, '구성: '+modelSummary()+' / '+vanLabel(), '수량: '+state.qty+'대', '키오스크 닉네임: '+(info.nickname||'미정'), 'CAT ID: '+(info.catid||'추후 전달'), 'S/W·관제: '+(info.sw||'미정'), 'PMS / 계정정보: '+(info.pms||'미정'), '',
+ '[1. 신청·현장 정보]', '신청자: '+infoTextValue('applicant',info.applicant), '신청일: '+infoTextValue('date',info.date), '숙박업소명: '+infoTextValue('site',info.site), '사업자번호: '+infoTextValue('business',info.business), '현장 담당자 / 연락처: '+infoTextValue('contact',info.contact), '설치 희망일: '+infoTextValue('install',info.install,'미정'), '설치 희망 시간: '+infoTextValue('installTime',info.installTime,'미정'), '설치 주소: '+infoTextValue('address',info.address), '운송 / 설치: '+infoTextValue('delivery',info.delivery,'미정'), '',
+ '[2. 신청 모델]', '모델: '+typeName()+' '+code()+' · '+mod.title, '구성: '+modelSummary()+' / '+vanLabel(), '수량: '+state.qty+'대', '키오스크 닉네임: '+infoTextValue('nickname',info.nickname,'미정'), 'CAT ID: '+infoTextValue('catid',info.catid,'추후 전달'), 'S/W·관제: '+infoTextValue('sw',info.sw,'미정'), 'PMS / 계정정보: '+infoTextValue('pms',info.pms,'미정'), '',
  '[3. 기본 구성 부품]', '가. '+typeName()+' 고정 부품', ...g.fixed.map(line), '고정 부품 소계: '+requestMoney(activeCost(g.fixed)), '', '나. 모델별 포함 장비', ...g.model.map(line), '모델별 포함 장비 소계: '+requestMoney(activeCost(g.model)), '기본 구성 최종 합계: '+requestMoney(activeCost([...g.fixed,...g.model])), '',
  '[4. 추가 옵션·교체품]', ...(c.options.length?c.options.flatMap(o=>[o.def.name+' '+o.qty+(o.def.unit||'개'),...o.parts.map(line)]):['추가 옵션 없음']), '',
  '[5. 부품 원가]', '모델 기본 원가: '+requestMoney(c.baseTotal), '추가 옵션·교체품: '+requestMoney(c.optionTotal), ...(c.adjust?['와이즈큐브 제외 금액: '+requestMoney(c.adjust)]:[]), (c.missing.length?'확인된 원가 합계: ':'총 부품 원가: ')+requestMoney(c.total), '',
- '[6. 설치·출하 요청사항]',info.notes||'별도 요청 없음'].join('\n');
+ '[6. 설치·출하 요청사항]',infoTextValue('notes',info.notes,'별도 요청 없음')].join('\n');
 }
 function itemTable(list,empty='해당 없음',subtotalLabel='',showPrices=true){
  const money=n=>showPrices?windowMoney(n):'-',unit=n=>!showPrices?'-':typeof n==='number'?windowMoney(n):'미확정';
  const strike=(p,value)=>p.unneeded?`<span class="req-unneeded" style="color:#8795a2;text-decoration:line-through">${value}</span>`:value;
  return `<table class="req-table"><colgroup><col style="width:32%"><col style="width:18%"><col style="width:10%"><col style="width:18%"><col style="width:22%"></colgroup><thead><tr><th>품목 / 사양</th><th>P/N</th><th class="q">수량</th><th class="n">원가 단가</th><th class="n">금액</th></tr></thead><tbody>${list.length?list.map(p=>`<tr class="${p.unneeded?'req-unneeded-row':''}"><td>${p.unneeded?'<span class="req-unneeded-badge" style="display:inline-block;margin-right:5px;padding:1px 5px;border:1px solid #d6a9a4;border-radius:4px;color:#a33e35;font-size:8px;font-weight:700;text-decoration:none">불필요</span>':''}${strike(p,esc(p.name))}<span class="req-spec">${strike(p,esc(p.spec||''))}</span></td><td class="req-pn">${strike(p,esc(p.pn||'미등록'))}</td><td class="q">${strike(p,p.qty)}</td><td class="n">${strike(p,unit(p.price))}</td><td class="n">${strike(p,unit(typeof p.price==='number'?p.price*p.qty:null))}</td></tr>`).join(''):`<tr><td colspan="5" class="empty">${empty}</td></tr>`}${subtotalLabel?`<tr class="req-subtotal"><td colspan="4">${esc(subtotalLabel)}</td><td class="n"><b>${money(activeCost(list))}</b></td></tr>`:''}</tbody></table>`;
 }
-function infoValue(key,value,fallback='—',multiline=false){let text=esc(value||fallback);if(multiline)text=text.replace(/\n/g,'<br>');return state.infoEmphasis[key]?`<span class="info-emphasis" style="color:#c62828;font-weight:700">${text}</span>`:text}
+function infoValue(key,value,fallback='—',multiline=false){let text=esc(value||fallback);if(multiline)text=text.replace(/\n/g,'<br>');return state.infoEmphasis[key]?`<span class="info-emphasis" style="color:#c62828;font-weight:700">★ ${text}</span>`:text}
 function infoRow(a,b,c,d,bKey='',dKey=''){return `<tr><th>${a}</th><td>${bKey?infoValue(bKey,b):esc(b||'—')}</td><th>${c}</th><td>${dKey?infoValue(dKey,d):esc(d||'—')}</td></tr>`}
 function installationInfoRows(i){return `<tr><th>현장 담당자</th><td colspan="3">${infoValue('contact',i.contact)}</td></tr>`+infoRow('설치 희망일',i.install,'설치 희망 시간',i.installTime||'미정','install','installTime')}
 function sectionTitle(n,title){return `<h2 class="req-section"><span>${n}</span>${title}</h2>`}

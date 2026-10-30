@@ -146,12 +146,17 @@ test('field emphasis colors only selected values and survives history snapshots'
  const h=app();h.run(`state.info={...state.info,applicant:'홍길동 / 운영팀',site:'강조 숙박',notes:'긴급 설치'};state.infoEmphasis={applicant:true,notes:true}`);
  for(const markup of [h.json('requestMarkup()'),h.json('emailMarkup()')]){
   assert.ok(markup.includes('신청자 / 소속'));
-  assert.ok(markup.includes('<span class="info-emphasis" style="color:#c62828;font-weight:700">홍길동 / 운영팀</span>'));
-  assert.ok(markup.includes('<span class="info-emphasis" style="color:#c62828;font-weight:700">긴급 설치</span>'));
+  assert.ok(markup.includes('<span class="info-emphasis" style="color:#c62828;font-weight:700">★ 홍길동 / 운영팀</span>'));
+  assert.ok(markup.includes('<span class="info-emphasis" style="color:#c62828;font-weight:700">★ 긴급 설치</span>'));
   assert.ok(markup.includes('숙박업소명'));
   assert.ok(markup.includes('강조 숙박'));
   assert.ok(!markup.includes('<span class="info-emphasis" style="color:#c62828;font-weight:700">강조 숙박</span>'));
  }
+ const text=h.json('requestText()');
+ assert.ok(text.includes('신청자: ★ 홍길동 / 운영팀'));
+ assert.ok(text.includes('[6. 설치·출하 요청사항]\n★ 긴급 설치'));
+ assert.ok(text.includes('숙박업소명: 강조 숙박'));
+ assert.ok(!text.includes('숙박업소명: ★ 강조 숙박'));
  h.run('const emphasizedSnapshot=historySnapshot();resetRequest();restoreOrder(emphasizedSnapshot)');
  assert.deepEqual(h.json('state.infoEmphasis'),{applicant:true,notes:true});
 });
