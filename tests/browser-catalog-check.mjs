@@ -42,6 +42,10 @@ try{
  assert.equal(await page.getByText('이 모델의 기본 부품·P/N 보기',{exact:true}).count(),0);
  assert.equal(await page.locator('#baseTable').count(),0);
  assert.equal(await page.locator('#infoForm [data-emphasis]').count(),14);
+ assert.equal(await page.locator('#models .model').count(),4);
+ assert.equal((await page.locator('#models').evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length)),4);
+ const modelCardRows=await page.locator('#models .model').evaluateAll(cards=>cards.map(card=>Math.round(card.getBoundingClientRect().top)));assert.equal(new Set(modelCardRows).size,1,'desktop model cards stay on one row');
+ await screenshot(page,'four-column-model-cards');
  for(const key of ['date','install','installTime']){const picker=page.locator(`[data-key="${key}"]`);await picker.evaluate(el=>Object.defineProperty(el,'showPicker',{value:()=>{el.dataset.pickerOpened='true'}}));await picker.click({position:{x:12,y:12}});assert.equal(await picker.getAttribute('data-picker-opened'),'true',key+' picker opens from the input body')}
  const initial=await page.evaluate(()=>calc().total);
  for(const type of ['general','slim'])for(const model of [1,2,3,4]){await page.evaluate(([kind,value])=>{state.type=kind;state.model=value;render()},[type,model]);const messages=await page.locator('#warnings').textContent();for(const obsolete of ['슬림형 브라켓은 잠정단가 적용','카드발행기: 도어락 연동·장착 부속 확인','AI BOX의 녹화·저장·조회 구성 확인'])assert.ok(!messages.includes(obsolete))}await page.evaluate(()=>{state.type='general';state.model=1;render()});
