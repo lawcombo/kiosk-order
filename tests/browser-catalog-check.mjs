@@ -37,6 +37,9 @@ async function screenshot(page,name){if(process.env.CHECK_SCREENSHOTS_DIR)await 
 try{
  const {page,context}=await makePage();
  assert.equal(await page.locator('body>header .brand').textContent(),'무인숙박 설치 품목 관리 및 출하 신청');
+ const headerBrandBox=await page.locator('body>header .brand').boundingBox(),firstPanelBox=await page.locator('main>div>.panel').first().boundingBox(),headerActionsBox=await page.locator('body>header .toolbar').boundingBox(),summaryBox=await page.locator('main>.summary').boundingBox();
+ assert.ok(Math.abs(headerBrandBox.x-firstPanelBox.x)<=1,'header left edge aligns with the body');
+ assert.ok(Math.abs((headerActionsBox.x+headerActionsBox.width)-(summaryBox.x+summaryBox.width))<=1,'header right edge aligns with the body');
  assert.equal(await page.getByRole('button',{name:'신청서 불러오기',exact:true}).count(),0);
  assert.equal(await page.locator('#saveHistoryButton').textContent(),'이력 저장');
  assert.equal(await page.getByText('이 모델의 기본 부품·P/N 보기',{exact:true}).count(),0);
