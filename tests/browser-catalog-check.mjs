@@ -42,6 +42,10 @@ try{
  assert.equal(await page.getByText('이 모델의 기본 부품·P/N 보기',{exact:true}).count(),0);
  assert.equal(await page.locator('#baseTable').count(),0);
  assert.equal(await page.locator('#infoForm [data-emphasis]').count(),14);
+ assert.equal(await page.locator('#sumPn').count(),0);
+ assert.equal(await page.locator('.summary-cost-card').count(),1);
+ assert.equal((await page.locator('.summary-actions').evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length)),2);
+ assert.ok((await page.locator('.summary').textContent()).includes('자료 내려받기'));
  const typeCardsText=await page.locator('#types').textContent();for(const removedCopy of ['현금 입·출금기 기본 포함','슬림 함체 · 여권스탠드 기본 포함','키오스크 없이 필요한 장비만 선택'])assert.ok(!typeCardsText.includes(removedCopy));assert.ok(typeCardsText.includes('NO KIOSK'));
  assert.equal(await page.locator('#models .model').count(),4);
  assert.equal((await page.locator('#models').evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length)),4);
