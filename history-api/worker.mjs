@@ -112,6 +112,14 @@ export function validateState(input) {
     throw new ApiError(400, '신청 정보 강조 설정이 올바르지 않습니다.');
   }
   const infoEmphasis = Object.fromEntries(Object.entries(rawInfoEmphasis).filter(([, value]) => value));
+  const rawExcludedParts = input.excludedParts ?? {};
+  if (!object(rawExcludedParts) || Object.keys(rawExcludedParts).length > 24) throw new ApiError(400, '불필요 품목 설정이 올바르지 않습니다.');
+  const excludedParts = Object.fromEntries(Object.entries(rawExcludedParts).map(([key, value]) => {
+    if (!/^(general|slim)\|[1-4]\|(NICE|KIS|PENDING)$/.test(key) || !Array.isArray(value) || value.length > 200 || new Set(value).size !== value.length || value.some(id => typeof id !== 'string' || !/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(id) || ['constructor', 'prototype'].includes(id))) {
+      throw new ApiError(400, '불필요 품목 설정이 올바르지 않습니다.');
+    }
+    return [key, [...value]];
+  }));
   if (Object.keys(input.options).length > 100 || Object.keys(input.overrides).length > 200) throw new ApiError(400, '품목 데이터가 너무 많습니다.');
   const options = Object.fromEntries(Object.entries(input.options).map(([key, value]) => {
     if (!/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(key) || ['constructor', 'prototype'].includes(key) || !object(value) || !integer(value.qty, 0, 10000)) {
@@ -137,7 +145,7 @@ export function validateState(input) {
     return [key, fields];
   }));
   const catalogSnapshot = input.catalogSnapshot ? validateCatalog(input.catalogSnapshot, message => { throw new ApiError(400, message); }) : undefined;
-  return { type: input.type, model: input.model, qty: input.qty, van: input.van, priceDisclosure: input.priceDisclosure === 'Y' ? 'Y' : 'N', optionQtyVersion: 2, info, infoEmphasis, options, overrides, pn: {}, showCost: false, showFixed: false, ...(catalogSnapshot ? { catalogSnapshot } : {}) };
+  return { type: input.type, model: input.model, qty: input.qty, van: input.van, priceDisclosure: input.priceDisclosure === 'Y' ? 'Y' : 'N', optionQtyVersion: 2, info, infoEmphasis, excludedParts, options, overrides, pn: {}, showCost: false, showFixed: false, ...(catalogSnapshot ? { catalogSnapshot } : {}) };
 }
 
 async function readJson(request) {

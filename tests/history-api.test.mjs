@@ -7,7 +7,7 @@ const origin = 'https://lawcombo.github.io';
 const env = { GITHUB_TOKEN: 'github_pat_TestTokenNotARealSecret', ALLOWED_ORIGINS: origin };
 const emptyList = { items: [], page: 1, pageSize: 10, total: 0, totalPages: 1, canDelete: true, nextCursor: null };
 const defaultCatalog = () => JSON.parse(readFileSync(new URL('../index.html', import.meta.url), 'utf8').match(/id="catalogData">([\s\S]*?)<\/script>/)[1]);
-const validState = () => ({ type: 'equipment', model: 1, qty: 1, van: 'NICE', priceDisclosure: 'Y', options: { ptz: { qty: 2, on: true } }, info: { site: '동해 숙박 <시험>', date: '2026-10-23', install: '2026-11-01', installTime: '14:30', notes: '안내 사항\n둘째 줄' }, infoEmphasis: { site: true, notes: true }, overrides: { g26: { price: 132000, pn: 'KI00672', name: 'PTZ 카메라', spec: '당시 사양' } } });
+const validState = () => ({ type: 'equipment', model: 1, qty: 1, van: 'NICE', priceDisclosure: 'Y', options: { ptz: { qty: 2, on: true } }, info: { site: '동해 숙박 <시험>', date: '2026-10-23', install: '2026-11-01', installTime: '14:30', notes: '안내 사항\n둘째 줄' }, infoEmphasis: { site: true, notes: true }, excludedParts: { 'general|1|NICE': ['g8', 'c28'] }, overrides: { g26: { price: 132000, pn: 'KI00672', name: 'PTZ 카메라', spec: '당시 사양' } } });
 
 export function mockGithub() {
   const files = new Map(), calls = [], revisions = new Map();
@@ -62,6 +62,7 @@ test('save creates one Unicode JSON snapshot and reloads exact historical values
   const record = await (await mock.request('/' + result.id)).json();
   assert.deepEqual(record.state.info.notes, state.info.notes);
   assert.deepEqual(record.state.infoEmphasis, state.infoEmphasis);
+  assert.deepEqual(record.state.excludedParts, state.excludedParts);
   assert.equal(record.state.info.installTime, '14:30');
   assert.deepEqual(record.state.overrides, state.overrides);
   assert.deepEqual(record.state.options, state.options);
@@ -106,6 +107,10 @@ test('unapproved origins, traversal, invalid payloads and methods cannot write',
   assert.equal((await mock.request('', 'POST', { schemaVersion: 1, state: badQuantity })).status, 400);
   const badPrice = validState(); badPrice.overrides.g26.price = 'free';
   assert.equal((await mock.request('', 'POST', { schemaVersion: 1, state: badPrice })).status, 400);
+  const badExcludedKey = validState(); badExcludedKey.excludedParts = { '../main': ['g8'] };
+  assert.equal((await mock.request('', 'POST', { schemaVersion: 1, state: badExcludedKey })).status, 400);
+  const badExcludedValue = validState(); badExcludedValue.excludedParts = { 'general|1|NICE': ['g8', 'g8'] };
+  assert.equal((await mock.request('', 'POST', { schemaVersion: 1, state: badExcludedValue })).status, 400);
   const huge = validState(); huge.info.notes = 'x'.repeat(129 * 1024);
   assert.equal((await mock.request('', 'POST', { schemaVersion: 1, state: huge })).status, 413);
   assert.equal((await mock.request('', 'POST', payload, env, { 'Content-Type': 'text/plain' })).status, 415);

@@ -100,6 +100,24 @@ test('model cost breakdown always shows fixed parts, their subtotal and model eq
  for(const type of ['general','slim']){h.run(`state.type='${type}';state.model=1`);const markup=h.json('breakdown(baseParts())'),label=type==='general'?'일반형':'슬림형';assert.ok(markup.includes(label+' 고정 부품'));assert.ok(markup.includes(label+' 고정 부품 소계'));assert.ok(markup.includes('모델별 포함 장비'));assert.ok(markup.includes('모델별 포함 장비 소계'));assert.ok(markup.includes('모델 기본 원가 합계'));assert.ok(!markup.includes('toggleFixed()'));assert.ok(!markup.includes('카드토출기는 함체, NVR은 저장용 HDD를 함께 포함합니다.'))}
 });
 
+test('request-only unneeded parts reduce cost, strike outputs and survive history without changing the catalog',()=>{
+ const h=app();
+ h.run(`state.type='general';state.model=1;state.van='NICE';state.qty=2;state.priceDisclosure='Y';const unneededBefore=calc().total;toggleUnneeded('g8');const unneededSnapshot=historySnapshot();`);
+ assert.equal(h.json('unneededBefore-calc().total'),2500000);
+ assert.equal(h.json("calc().base.find(p=>p.id==='g8').unneeded"),true);
+ assert.equal(h.json("calc().lines.find(p=>p.id==='g8').qty"),2);
+ assert.deepEqual(h.json("state.excludedParts['general|1|NICE']"),['g8']);
+ const breakdown=h.json('breakdown(calc().base)'),button=breakdown.indexOf("toggleUnneeded('g8')"),name=breakdown.indexOf('함체',button);
+ assert.ok(button>=0&&button<name,'the unneeded button stays left of the part name');
+ assert.ok(breakdown.includes('breakdown-unneeded'));
+ assert.ok(h.json('requestText()').includes('[불필요 · 출하 제외] 함체'));
+ for(const markup of [h.json('requestMarkup()'),h.json('emailMarkup()')]){assert.ok(markup.includes('req-unneeded-row'));assert.ok(markup.includes('text-decoration:line-through'));assert.ok(markup.includes('불필요'))}
+ assert.equal(h.run("baseParts().find(p=>p.id==='g8').unneeded"),undefined);
+ assert.equal(h.json("currentCatalog().models.find(m=>m.id==='G1').items.some(row=>row.partId==='g8')"),true);
+ h.run('resetRequest()');assert.deepEqual(h.json('state.excludedParts'),{});
+ h.run('restoreOrder(unneededSnapshot)');assert.deepEqual(h.json("state.excludedParts['general|1|NICE']"),['g8']);assert.equal(h.json("calc().base.find(p=>p.id==='g8').unneeded"),true);
+});
+
 test('catalog cover splits general and slim summaries without the old guide',()=>{
  const h=app(),markup=h.json('catalogMarkup()'),cover=markup.slice(0,markup.indexOf('</article>'));
  assert.ok(!cover.includes('원가 구성 기준'));
